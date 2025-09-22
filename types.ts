@@ -1,4 +1,3 @@
-
 export enum UnitType {
   CLASSROOM = 'CLASSROOM',
   CORRIDOR = 'CORRIDOR',
@@ -65,6 +64,14 @@ export interface Graph {
 
 export enum AccessibilityFilter {
   NONE = 'NONE',
-  NO_STAIRS = 'NO_STAIRS',
   ELEVATOR_ONLY = 'ELEVATOR_ONLY',
+}
+
+export type Page = 'map' | 'admin';
+
+export type Role = 'admin' | 'viewer';
+
+export interface User {
+  name: string;
+  role: Role;
 }

@@ -165,9 +165,6 @@ const findShortestPath = (graph: Graph, startId: string, endId: string, filter: 
       if(!vNode) continue;
 
       // Apply filters
-      if (filter === AccessibilityFilter.NO_STAIRS && (uNode.unit.type === UnitType.STAIRS || vNode.unit.type === UnitType.STAIRS) && edge.type === 'vertical') {
-        continue;
-      }
       if (filter === AccessibilityFilter.ELEVATOR_ONLY && edge.type === 'vertical' && uNode.unit.type !== UnitType.ELEVATOR) {
         continue;
       }

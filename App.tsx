@@ -1,87 +1,66 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import Controls from './components/Controls';
-import MapViewer from './components/MapViewer';
-import { useGraph } from './hooks/useGraph';
-import { campusData } from './data/campusData';
-import { AccessibilityFilter, UnitType } from './types';
+import React, { useState } from 'react';
+import Navigation from './components/Navigation';
+import MapPage from './pages/MapPage';
+import AdminPage from './pages/AdminPage';
+import LoginPage from './pages/LoginPage';
+import { campusData as defaultCampusData } from './data/campusData';
+import type { CampusData, Page, User, Role } from './types';
+
+// Hardcoded user credentials
+const USERS: Record<string, { password: string; role: Role }> = {
+  'santanu': { password: '111', role: 'admin' },
+  'san': { password: '111', role: 'viewer' },
+};
 
 const App: React.FC = () => {
-  const [startUnit, setStartUnit] = useState<string | null>(null);
-  const [endUnit, setEndUnit] = useState<string | null>(null);
-  const [filter, setFilter] = useState<AccessibilityFilter>(AccessibilityFilter.NONE);
-  const [path, setPath] = useState<string[] | null>(null);
-  const [pathInstructions, setPathInstructions] = useState<string>('');
-  
-  const { getPath } = useGraph(campusData);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentPage, setCurrentPage] = useState<Page>('map');
+  const [currentData, setCurrentData] = useState<CampusData>(defaultCampusData);
 
-  const handleFindPath = () => {
-    if (startUnit && endUnit) {
-      const newPath = getPath(startUnit, endUnit, filter);
-      setPath(newPath);
+  const handleLogin = (username: string, password: string): boolean => {
+    const user = USERS[username];
+    if (user && user.password === password) {
+      setCurrentUser({ name: username, role: user.role });
+      return true;
     }
+    return false;
   };
 
-  const handleClearPath = () => {
-    setStartUnit(null);
-    setEndUnit(null);
-    setPath(null);
-    setPathInstructions('');
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setCurrentPage('map'); // Reset to default page on logout
+  };
+
+  const handleDataUpload = (newData: CampusData) => {
+    setCurrentData(newData);
+    alert('Custom data loaded successfully!');
+    setCurrentPage('map'); // Switch to map view after successful upload
   };
   
-  const generateInstructions = useCallback((currentPath: string[] | null) => {
-    if (!currentPath || currentPath.length === 0) {
-        setPathInstructions('');
-        return;
-    }
-    const instructions = currentPath.map((unitId, index) => {
-        const unit = campusData.units.find(u => u.id === unitId);
-        if (!unit) return '';
+  const handleResetData = () => {
+    setCurrentData(defaultCampusData);
+    alert('Data has been reset to the default campus layout.');
+  };
 
-        let action = `Go to ${unit.name}`;
-        if(index === 0) action = `Start at ${unit.name}`;
-        else if (index === currentPath.length-1) action = `You have arrived at ${unit.name}`;
-        
-        // Add more context
-        const nextUnit = index < currentPath.length-1 ? campusData.units.find(u => u.id === currentPath[index+1]) : null;
-        if(nextUnit && unit.levelId !== nextUnit.levelId) {
-            if(nextUnit.type === UnitType.STAIRS || unit.type === UnitType.STAIRS) {
-                action += ` and take the stairs to ${campusData.levels.find(l=>l.id===nextUnit.levelId)?.name}`;
-            } else if (nextUnit.type === UnitType.ELEVATOR || unit.type === UnitType.ELEVATOR) {
-                 action += ` and take the elevator to ${campusData.levels.find(l=>l.id===nextUnit.levelId)?.name}`;
-            }
-        }
+  if (!currentUser) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
 
-        return `${index + 1}. ${action}`;
-    }).join('\n');
-    setPathInstructions(instructions);
-  }, []);
-
-  useEffect(() => {
-    generateInstructions(path);
-  }, [path, generateInstructions]);
-
+  // All authenticated users now use the same layout structure.
+  // The Navigation component will handle role-based visibility of its elements.
   return (
-    <main className="flex h-screen w-screen bg-gray-900 overflow-hidden">
-      <Controls
-        units={campusData.units}
-        startUnit={startUnit}
-        setStartUnit={setStartUnit}
-        endUnit={endUnit}
-        setEndUnit={setEndUnit}
-        filter={filter}
-        setFilter={setFilter}
-        onFindPath={handleFindPath}
-        onClearPath={handleClearPath}
-        path={path}
-        pathInstructions={pathInstructions}
+    <div className="flex flex-col h-screen w-screen bg-gray-900 text-gray-100 overflow-hidden">
+      <Navigation 
+        user={currentUser}
+        currentPage={currentPage} 
+        setCurrentPage={setCurrentPage} 
+        onLogout={handleLogout}
       />
-      <MapViewer 
-        data={campusData} 
-        path={path} 
-        startUnitId={startUnit}
-        endUnitId={endUnit}
-      />
-    </main>
+      <main className="flex-1 overflow-hidden">
+        {currentPage === 'map' && <MapPage campusData={currentData} />}
+        {currentPage === 'admin' && <AdminPage onDataUpload={handleDataUpload} onResetData={handleResetData} />}
+      </main>
+    </div>
   );
 };
 
