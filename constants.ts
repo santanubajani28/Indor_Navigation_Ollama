@@ -1,5 +1,4 @@
-
-import { UnitType } from './types';
+import { DetailType, UnitType } from './types';
 
 export const UNIT_TYPE_COLORS: Record<UnitType, string> = {
   [UnitType.CLASSROOM]: 'bg-sky-800',
@@ -21,5 +20,27 @@ export const UNIT_TYPE_BORDERS: Record<UnitType, string> = {
     [UnitType.ENTRANCE]: 'stroke-green-400',
 };
 
+// New constants for the 3D viewer
+export const UNIT_TYPE_COLORS_3D: Record<UnitType, number> = {
+  [UnitType.CLASSROOM]: 0x075985,
+  [UnitType.CORRIDOR]: 0x4B5563,
+  [UnitType.ELEVATOR]: 0x9333EA,
+  [UnitType.STAIRS]: 0xEA580C,
+  [UnitType.OFFICE]: 0x115E59,
+  [UnitType.RESTRICTED]: 0x7F1D1D,
+  [UnitType.ENTRANCE]: 0x16A34A,
+};
+
+export const DETAIL_TYPE_COLORS_3D: Record<DetailType, number> = {
+  [DetailType.WALL]: 0xcccccc, // light grey
+  [DetailType.DOOR]: 0x85533c, // brown
+  [DetailType.WINDOW]: 0x87ceeb, // sky blue
+};
+export const WALL_THICKNESS = 2;
+export const DOOR_HEIGHT_REDUCTION = 0.5; // Doors are 0.5m shorter than walls
+
 export const MAP_WIDTH = 1200;
 export const MAP_HEIGHT = 800;
+
+export const UNIT_HEIGHT = 3; // 3 meters
+export const LEVEL_SEPARATION = 5; // 5 meters of space between floors

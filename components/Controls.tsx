@@ -1,10 +1,11 @@
 import React from 'react';
-import type { Unit } from '../types';
+import type { Level, Unit } from '../types';
 import { AccessibilityFilter, UnitType } from '../types';
 import Legend from './Legend';
 
 interface ControlsProps {
   units: Unit[];
+  levels: Level[];
   startUnit: string | null;
   setStartUnit: (id: string) => void;
   endUnit: string | null;
@@ -15,10 +16,14 @@ interface ControlsProps {
   onClearPath: () => void;
   path: string[] | null;
   pathInstructions: string;
+  viewMode: '2D' | '3D';
+  selectedLevelId: string;
+  setSelectedLevelId: (id: string) => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({
   units,
+  levels,
   startUnit,
   setStartUnit,
   endUnit,
@@ -29,6 +34,9 @@ const Controls: React.FC<ControlsProps> = ({
   onClearPath,
   path,
   pathInstructions,
+  viewMode,
+  selectedLevelId,
+  setSelectedLevelId,
 }) => {
   const selectableUnits = units.filter(u => {
       const selectableTypes = [
@@ -42,8 +50,8 @@ const Controls: React.FC<ControlsProps> = ({
   return (
     <div className="w-96 flex-shrink-0 bg-gray-900/80 backdrop-blur-sm p-6 space-y-6 overflow-y-auto h-full shadow-2xl rounded-r-2xl border-l border-gray-700">
       <div>
-        <h1 className="text-3xl font-bold text-white">Campus Navigator</h1>
-        <p className="text-gray-400 mt-1">Find the best path on campus.</p>
+        <h1 className="text-3xl font-bold text-white">Indoor Navigator</h1>
+        <p className="text-gray-400 mt-1">Find the best path indoors.</p>
       </div>
 
       <div className="space-y-4">
@@ -77,6 +85,22 @@ const Controls: React.FC<ControlsProps> = ({
         </div>
       </div>
       
+      {viewMode === '2D' && (
+         <div>
+          <label htmlFor="level-select" className="block text-sm font-medium text-gray-300 mb-1">Floor Selection</label>
+          <select
+            id="level-select"
+            value={selectedLevelId}
+            onChange={(e) => setSelectedLevelId(e.target.value)}
+            className="w-full bg-gray-800 border-gray-600 rounded-md shadow-sm text-white focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            {levels.sort((a,b) => a.zIndex - b.zIndex).map(level => (
+              <option key={level.id} value={level.id}>{level.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div>
         <h3 className="text-sm font-medium text-gray-300 mb-2">Accessibility Options</h3>
         <div className="space-y-2">

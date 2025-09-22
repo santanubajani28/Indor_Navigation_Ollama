@@ -111,6 +111,9 @@ export const parseShapefile = async (buffer: ArrayBuffer): Promise<CampusData> =
             polygon: geoJsonPolygonToAppPolygon(feature.geometry.coordinates),
             verticalConnectorId: p.v_conn_id ? String(p.v_conn_id) : undefined,
             facilityId: String(p.facilityId),
+            // FIX: Add a placeholder datasetId to satisfy the Unit type definition.
+            // This will be replaced by a real ID when saved to the database.
+            datasetId: 0,
         };
     });
 
@@ -128,6 +131,8 @@ export const parseShapefile = async (buffer: ArrayBuffer): Promise<CampusData> =
                 facilityId: String(levelUnits[0].facilityId),
                 zIndex: parseInt(unit.levelId.replace(/\D/g, ''), 10) || 0,
                 polygon: getBoundingBox(levelUnits.map(u => u.polygon)),
+                // FIX: Add a placeholder datasetId to satisfy the Level type definition.
+                datasetId: 0,
             });
         }
         // FIX: Directly use the facilityId from the enriched unit object, which is more efficient and correct.
@@ -139,14 +144,19 @@ export const parseShapefile = async (buffer: ArrayBuffer): Promise<CampusData> =
                 id: facilityId,
                 name: `Facility ${facilityId}`,
                 polygon: getBoundingBox(facilityUnits.map(u => u.polygon)),
+                // FIX: Add a placeholder datasetId to satisfy the Facility type definition.
+                datasetId: 0,
             });
         }
     }
 
+    // FIX: Add missing 'details' property to satisfy CampusData type.
+    // GIS files in this implementation do not contain wall/door data.
     return {
         units,
         levels: Array.from(levelsMap.values()),
         facilities: Array.from(facilitiesMap.values()),
+        details: [],
     };
 };
 
@@ -169,6 +179,8 @@ export const parseGeoPackage = async (buffer: ArrayBuffer): Promise<CampusData> 
             id: String(p.id || p.ID),
             name: String(p.name || p.NAME),
             polygon: geoJsonPolygonToAppPolygon(feature.geometry.coordinates),
+            // FIX: Add a placeholder datasetId to satisfy the Facility type definition.
+            datasetId: 0,
         });
     }
 
@@ -181,6 +193,8 @@ export const parseGeoPackage = async (buffer: ArrayBuffer): Promise<CampusData> 
             facilityId: String(p.facilityId),
             zIndex: Number(p.zIndex || 0),
             polygon: geoJsonPolygonToAppPolygon(feature.geometry.coordinates),
+            // FIX: Add a placeholder datasetId to satisfy the Level type definition.
+            datasetId: 0,
         });
     }
 
@@ -194,8 +208,12 @@ export const parseGeoPackage = async (buffer: ArrayBuffer): Promise<CampusData> 
             levelId: String(p.levelId),
             polygon: geoJsonPolygonToAppPolygon(feature.geometry.coordinates),
             verticalConnectorId: p.v_conn_id ? String(p.v_conn_id) : undefined,
+            // FIX: Add a placeholder datasetId to satisfy the Unit type definition.
+            datasetId: 0,
         });
     }
 
-    return { facilities, levels, units };
+    // FIX: Add missing 'details' property to satisfy CampusData type.
+    // GIS files in this implementation do not contain wall/door data.
+    return { facilities, levels, units, details: [] };
 };

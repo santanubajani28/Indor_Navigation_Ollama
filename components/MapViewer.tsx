@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import type { CampusData, Point, Polygon, Unit } from '../types';
 import { MAP_WIDTH, MAP_HEIGHT, UNIT_TYPE_BORDERS, UNIT_TYPE_COLORS } from '../constants';
@@ -123,6 +122,7 @@ interface MapViewerProps {
   path: string[] | null;
   startUnitId: string | null;
   endUnitId: string | null;
+  selectedLevelId: string;
 }
 
 const UnitPolygon: React.FC<{
@@ -165,126 +165,140 @@ const getPolygonCenter = (polygon: Polygon): Point => {
 };
 
 
-const MapViewer: React.FC<MapViewerProps> = ({ data, path, startUnitId, endUnitId }) => {
+const MapViewer: React.FC<MapViewerProps> = ({ data, path, startUnitId, endUnitId, selectedLevelId }) => {
   
+  const visibleLevel = useMemo(() => data.levels.find(l => l.id === selectedLevelId), [data.levels, selectedLevelId]);
+  const visibleUnits = useMemo(() => data.units.filter(u => u.levelId === selectedLevelId), [data.units, selectedLevelId]);
+
+  const viewBox = useMemo(() => {
+    if (!visibleLevel || visibleLevel.polygon.length === 0) {
+        return `0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`;
+    }
+    const padding = 50;
+    const allPoints = visibleLevel.polygon;
+    const minX = Math.min(...allPoints.map(p => p.x));
+    const minY = Math.min(...allPoints.map(p => p.y));
+    const maxX = Math.max(...allPoints.map(p => p.x));
+    const maxY = Math.max(...allPoints.map(p => p.y));
+    const width = maxX - minX;
+    const height = maxY - minY;
+
+    return `${minX - padding} ${minY - padding} ${width + padding * 2} ${height + padding * 2}`;
+  }, [visibleLevel]);
+
   const pathData = useMemo(() => {
     if (!path || path.length < 2) return null;
 
     const unitsOnPath = path.map(id => data.units.find(u => u.id === id)).filter(Boolean) as Unit[];
     if (unitsOnPath.length < 2) return null;
 
-    const mainPathDParts: string[] = [];
-    const transitionLines: { from: Point; to: Point }[] = [];
-    let totalLength = 0;
-    
-    const startPoint = getPolygonCenter(unitsOnPath[0].polygon);
-    const endPoint = getPolygonCenter(unitsOnPath[unitsOnPath.length - 1].polygon);
-
-    let currentSegmentPoints: Point[] = [startPoint];
+    const pathPoints: (Point | null)[] = [];
     const communalTypes = [UnitType.CORRIDOR, UnitType.STAIRS, UnitType.ELEVATOR];
 
-    const processSegment = (points: Point[]) => {
-        if (points.length < 2) return;
-        
-        const finalPoints = points.filter((p, i) => {
-            if (i === 0) return true;
-            const prev = points[i-1];
-            return Math.hypot(p.x - prev.x, p.y - prev.y) > 0.1;
-        });
-
-        if (finalPoints.length < 2) return;
-
-        mainPathDParts.push("M " + finalPoints.map(p => `${p.x},${p.y}`).join(" L "));
-        
-        for (let i = 0; i < finalPoints.length - 1; i++) {
-          totalLength += Math.hypot(finalPoints[i+1].x - finalPoints[i].x, finalPoints[i+1].y - finalPoints[i].y);
+    // Build a full list of high-resolution path points, including transitions
+    for (let i = 0; i < unitsOnPath.length; i++) {
+        const currentUnit = unitsOnPath[i];
+        if (i === 0) {
+            pathPoints.push(getPolygonCenter(currentUnit.polygon));
+            continue;
         }
-    };
+        
+        const prevUnit = unitsOnPath[i - 1];
+        if (currentUnit.levelId !== prevUnit.levelId) {
+             pathPoints.push(getPolygonCenter(prevUnit.polygon));
+             pathPoints.push(null); // Represents a level change
+             pathPoints.push(getPolygonCenter(currentUnit.polygon));
+             continue;
+        }
 
+        const doorway = findMidpointOfSharedEdge(prevUnit, currentUnit);
+        if(!doorway) {
+            pathPoints.push(getPolygonCenter(currentUnit.polygon));
+            continue;
+        }
+
+        const isPrevCommunal = communalTypes.includes(prevUnit.type);
+        const isCurrentCommunal = communalTypes.includes(currentUnit.type);
+        const lastPoint = pathPoints[pathPoints.length - 1] as Point;
+
+        if (!isPrevCommunal && isCurrentCommunal) { // Room -> Corridor
+            pathPoints.push(doorway);
+            const corridorInfo = getCorridorInfo(currentUnit);
+            if (corridorInfo.orientation === 'horizontal') pathPoints.push({ x: doorway.x, y: corridorInfo.centerline });
+            else pathPoints.push({ x: corridorInfo.centerline, y: doorway.y });
+        } else if (isPrevCommunal && isCurrentCommunal) { // Corridor -> Corridor
+            const corridorAInfo = getCorridorInfo(prevUnit);
+            if (corridorAInfo.orientation === 'horizontal') pathPoints.push({ x: doorway.x, y: lastPoint.y });
+            else pathPoints.push({ x: lastPoint.x, y: doorway.y });
+            
+            pathPoints.push(doorway);
+
+            const corridorBInfo = getCorridorInfo(currentUnit);
+            if (corridorBInfo.orientation === 'horizontal') pathPoints.push({ x: doorway.x, y: corridorBInfo.centerline });
+            else pathPoints.push({ x: corridorBInfo.centerline, y: doorway.y });
+        } else if (isPrevCommunal && !isCurrentCommunal) { // Corridor -> Room
+            const corridorInfo = getCorridorInfo(prevUnit);
+            if (corridorInfo.orientation === 'horizontal') pathPoints.push({ x: doorway.x, y: lastPoint.y });
+            else pathPoints.push({ x: lastPoint.x, y: doorway.y });
+            pathPoints.push(doorway);
+            pathPoints.push(getPolygonCenter(currentUnit.polygon));
+        } else {
+             pathPoints.push(getPolygonCenter(currentUnit.polygon));
+        }
+    }
+
+    let totalLength = 0;
+    const pathDParts: string[] = [];
+    let currentSegment: Point[] = [];
+
+    // Filter points by selected level and create SVG path `d` attributes
     for (let i = 0; i < unitsOnPath.length - 1; i++) {
         const unitA = unitsOnPath[i];
         const unitB = unitsOnPath[i + 1];
 
-        if (unitA.levelId !== unitB.levelId) {
-            // End the current segment at the center of the vertical transport unit
-            currentSegmentPoints.push(getPolygonCenter(unitA.polygon));
-            processSegment(currentSegmentPoints);
-
-            // Record the transition for separate rendering
-            transitionLines.push({
-                from: getPolygonCenter(unitA.polygon),
-                to: getPolygonCenter(unitB.polygon)
-            });
-
-            // Start a new segment on the next level
-            currentSegmentPoints = [getPolygonCenter(unitB.polygon)];
-        } else {
-            // Same-level pathing logic
-            const doorwayAB = findMidpointOfSharedEdge(unitA, unitB);
-            if (!doorwayAB) {
-                console.warn(`No shared edge found between ${unitA.name} and ${unitB.name}, using centers as fallback.`);
-                currentSegmentPoints.push(getPolygonCenter(unitB.polygon));
-                continue;
+        if (unitA.levelId === selectedLevelId) {
+            if (currentSegment.length === 0) {
+                 // Start of a new segment on this floor
+                 // FIX: Pass unit.polygon to getPolygonCenter instead of the whole unit object.
+                 const startPoint = (i === 0) ? getPolygonCenter(unitA.polygon) : findMidpointOfSharedEdge(unitsOnPath[i-1], unitA) || getPolygonCenter(unitA.polygon);
+                 currentSegment.push(startPoint);
             }
             
-            const isACommunal = communalTypes.includes(unitA.type);
-            const isBCommunal = communalTypes.includes(unitB.type);
+            // FIX: Pass unit.polygon to getPolygonCenter instead of the whole unit object.
+            const transitionPoint = (unitA.levelId !== unitB.levelId) 
+                ? getPolygonCenter(unitA.polygon) 
+                : findMidpointOfSharedEdge(unitA, unitB) || getPolygonCenter(unitB.polygon);
 
-            if (!isACommunal && isBCommunal) { // Room -> Corridor
-                currentSegmentPoints.push(doorwayAB);
-                const corridorInfo = getCorridorInfo(unitB);
-                if (corridorInfo.orientation === 'horizontal') {
-                    currentSegmentPoints.push({ x: doorwayAB.x, y: corridorInfo.centerline });
-                } else {
-                    currentSegmentPoints.push({ x: corridorInfo.centerline, y: doorwayAB.y });
-                }
-            } else if (isACommunal && isBCommunal) { // Corridor -> Corridor
-                const corridorAInfo = getCorridorInfo(unitA);
-                const prevPoint = currentSegmentPoints[currentSegmentPoints.length - 1];
-                
-                if (corridorAInfo.orientation === 'horizontal') {
-                    currentSegmentPoints.push({ x: doorwayAB.x, y: prevPoint.y });
-                } else {
-                    currentSegmentPoints.push({ x: prevPoint.x, y: doorwayAB.y });
-                }
-                
-                currentSegmentPoints.push(doorwayAB);
+            currentSegment.push(transitionPoint);
+        }
 
-                const corridorBInfo = getCorridorInfo(unitB);
-                if (corridorBInfo.orientation === 'horizontal') {
-                    currentSegmentPoints.push({ x: doorwayAB.x, y: corridorBInfo.centerline });
-                } else {
-                    currentSegmentPoints.push({ x: corridorBInfo.centerline, y: doorwayAB.y });
+        if (unitA.levelId !== unitB.levelId || i === unitsOnPath.length - 2) {
+             if (currentSegment.length > 1) {
+                // End of a segment, add it to the path parts
+                if (i === unitsOnPath.length - 2 && unitB.levelId === selectedLevelId) {
+                    // FIX: Pass unit.polygon to getPolygonCenter instead of the whole unit object.
+                    currentSegment.push(getPolygonCenter(unitB.polygon));
                 }
-            } else if (isACommunal && !isBCommunal) { // Corridor -> Room
-                const corridorInfo = getCorridorInfo(unitA);
-                const prevPoint = currentSegmentPoints[currentSegmentPoints.length - 1];
-
-                if (corridorInfo.orientation === 'horizontal') {
-                    currentSegmentPoints.push({ x: doorwayAB.x, y: prevPoint.y });
-                } else {
-                    currentSegmentPoints.push({ x: prevPoint.x, y: doorwayAB.y });
+                pathDParts.push("M " + currentSegment.map(p => `${p.x},${p.y}`).join(" L "));
+                for (let k = 0; k < currentSegment.length - 1; k++) {
+                    totalLength += Math.hypot(currentSegment[k+1].x - currentSegment[k].x, currentSegment[k+1].y - currentSegment[k].y);
                 }
-                currentSegmentPoints.push(doorwayAB);
-            } else { 
-                currentSegmentPoints.push(doorwayAB);
-            }
+             }
+             currentSegment = [];
         }
     }
-
-    // Process the final segment
-    currentSegmentPoints.push(endPoint);
-    processSegment(currentSegmentPoints);
-
-    // The animation path is all parts joined together. The "M" commands will cause jumps.
-    const animationPathD = mainPathDParts.join(' ');
-
-    return { d: animationPathD, length: totalLength, transitionLines, startPoint, endPoint };
-  }, [path, data.units]);
+    const animationPathD = pathDParts.join(' ');
+    const startUnit = data.units.find(u=>u.id === startUnitId);
+    const endUnit = data.units.find(u=>u.id === endUnitId);
+    const startPoint = startUnit ? getPolygonCenter(startUnit.polygon) : null;
+    const endPoint = endUnit ? getPolygonCenter(endUnit.polygon) : null;
+    
+    return { d: animationPathD, length: totalLength, startPoint, endPoint, isStartVisible: startUnit?.levelId === selectedLevelId, isEndVisible: endUnit?.levelId === selectedLevelId };
+  }, [path, data.units, selectedLevelId, startUnitId, endUnitId]);
 
   return (
     <div className="flex-1 p-4 bg-gray-800/50 rounded-l-2xl">
-      <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full">
+      <svg viewBox={viewBox} className="w-full h-full">
         <defs>
             <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
                 <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
@@ -295,16 +309,16 @@ const MapViewer: React.FC<MapViewerProps> = ({ data, path, startUnitId, endUnitI
             </filter>
         </defs>
       
-        {/* Render Levels */}
-        {data.levels.map(level => (
-            <g key={level.id}>
-                 <polygon points={level.polygon.map(p => `${p.x},${p.y}`).join(' ')} className="fill-gray-800 stroke-gray-600 stroke-1"/>
-                 <text x={level.polygon[0].x + 20} y={level.polygon[0].y + 30} className="fill-gray-500 text-2xl font-bold">{level.name}</text>
+        {/* Render Level */}
+        {visibleLevel && (
+            <g key={visibleLevel.id}>
+                 <polygon points={visibleLevel.polygon.map(p => `${p.x},${p.y}`).join(' ')} className="fill-gray-800 stroke-gray-600 stroke-1"/>
+                 <text x={visibleLevel.polygon[0].x + 20} y={visibleLevel.polygon[0].y + 30} className="fill-gray-500 text-2xl font-bold">{visibleLevel.name}</text>
             </g>
-        ))}
+        )}
 
         {/* Render Units */}
-        {data.units.map(unit => (
+        {visibleUnits.map(unit => (
           <UnitPolygon
             key={unit.id}
             unit={unit}
@@ -314,24 +328,10 @@ const MapViewer: React.FC<MapViewerProps> = ({ data, path, startUnitId, endUnitI
         ))}
 
         {/* Render animated path line and navigator icon */}
-        {pathData && (
+        {pathData && pathData.d && (
           <g>
-            {/* Draw dashed lines for level transitions */}
-            {pathData.transitionLines.map((line, index) => (
-                <line
-                    key={`transition-${index}`}
-                    x1={line.from.x}
-                    y1={line.from.y}
-                    x2={line.to.x}
-                    y2={line.to.y}
-                    className="stroke-blue-500/80 stroke-[3] fill-none"
-                    strokeDasharray="8 8"
-                    style={{ filter: 'url(#glow)' }}
-                />
-            ))}
-            {/* Draw the main path segments on each floor */}
             <path
-              key={path?.join('-')} 
+              key={path?.join('-') + selectedLevelId} 
               id="navigation-path"
               d={pathData.d}
               className="path-line-animated stroke-blue-500 stroke-[4] fill-none drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]"
@@ -342,8 +342,8 @@ const MapViewer: React.FC<MapViewerProps> = ({ data, path, startUnitId, endUnitI
               style={{ filter: 'url(#glow)' }}
             />
             {/* Start and End dots */}
-            <circle cx={pathData.startPoint.x} cy={pathData.startPoint.y} r="8" className="fill-green-500 stroke-white stroke-2" style={{ filter: 'url(#glow)' }} />
-            <circle cx={pathData.endPoint.x} cy={pathData.endPoint.y} r="8" className="fill-red-500 stroke-white stroke-2" style={{ filter: 'url(#glow)' }} />
+            {pathData.isStartVisible && pathData.startPoint && <circle cx={pathData.startPoint.x} cy={pathData.startPoint.y} r="8" className="fill-green-500 stroke-white stroke-2" style={{ filter: 'url(#glow)' }} />}
+            {pathData.isEndVisible && pathData.endPoint && <circle cx={pathData.endPoint.x} cy={pathData.endPoint.y} r="8" className="fill-red-500 stroke-white stroke-2" style={{ filter: 'url(#glow)' }} />}
 
             {/* Animated Navigator Icon */}
             <g style={{ filter: 'url(#glow)' }}>

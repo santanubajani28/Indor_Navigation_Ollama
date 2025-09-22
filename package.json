@@ -1,5 +1,5 @@
 {
-  "name": "campus-gis-pathfinding-visualizer",
+  "name": "indoor-navigator",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "three": "^0.180.0",
+    "sql.js": "1.10.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

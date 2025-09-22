@@ -17,7 +17,7 @@ const Navigation: React.FC<NavigationProps> = ({ user, currentPage, setCurrentPa
     <header className="bg-gray-800 shadow-md z-10">
       <nav className="container mx-auto px-6 py-3 flex justify-between items-center">
         <div className="flex items-center space-x-4">
-          <h1 className="text-xl font-bold text-white">Campus GIS Navigator</h1>
+          <h1 className="text-xl font-bold text-white">Indoor Navigator</h1>
           <span className="text-sm text-gray-400">| Welcome, <span className="font-semibold capitalize text-gray-200">{user.name}</span></span>
         </div>
         <div className="flex items-center space-x-4">

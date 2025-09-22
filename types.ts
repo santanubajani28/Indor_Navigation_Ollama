@@ -1,3 +1,5 @@
+import { campusData } from "./data/campusData";
+
 export enum UnitType {
   CLASSROOM = 'CLASSROOM',
   CORRIDOR = 'CORRIDOR',
@@ -8,6 +10,12 @@ export enum UnitType {
   ENTRANCE = 'ENTRANCE',
 }
 
+export enum DetailType {
+  WALL = 'WALL',
+  DOOR = 'DOOR',
+  WINDOW = 'WINDOW',
+}
+
 export type Point = {
   x: number;
   y: number;
@@ -15,12 +23,21 @@ export type Point = {
 
 export type Polygon = Point[];
 
+export interface Detail {
+  id: string;
+  type: DetailType;
+  levelId: string;
+  line: Point[];
+  datasetId: number;
+}
+
 export interface Unit {
   id: string;
   name: string;
   type: UnitType;
   levelId: string;
   polygon: Polygon;
+  datasetId: number;
   // Used to link stairs/elevators across levels
   verticalConnectorId?: string;
 }
@@ -31,18 +48,28 @@ export interface Level {
   facilityId: string;
   polygon: Polygon;
   zIndex: number;
+  datasetId: number;
 }
 
 export interface Facility {
   id: string;
   name: string;
   polygon: Polygon;
+  datasetId: number;
 }
 
 export interface CampusData {
   facilities: Facility[];
   levels: Level[];
   units: Unit[];
+  details: Detail[];
+}
+
+export interface Dataset {
+    id: number;
+    name: string;
+    createdAt: string;
+    isActive: boolean;
 }
 
 export interface GraphNode {
