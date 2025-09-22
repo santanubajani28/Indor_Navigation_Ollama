@@ -1,0 +1,5 @@
+{
+  "name": "Campus GIS Pathfinding Visualizer",
+  "description": "A React application to visualize a multi-layered GIS model of a university campus. It builds a spatial graph to find and animate navigable pathways between units, respecting accessibility constraints and restricted areas.",
+  "requestFramePermissions": []
+}
