@@ -1,0 +1,81 @@
+{
+  "sites": [
+    {
+      "id": "SITE-1",
+      "name": "Sample Campus",
+      "polygon": [{"x": 0, "y": 0}, {"x": 120, "y": 0}, {"x": 120, "y": 80}, {"x": 0, "y": 80}],
+      "datasetId": 1
+    }
+  ],
+  "facilities": [
+    {
+      "id": "FAC-1",
+      "name": "Science Building",
+      "polygon": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 70}, {"x": 10, "y": 70}],
+      "datasetId": 1,
+      "siteId": "SITE-1"
+    }
+  ],
+  "levels": [
+    {
+      "id": "LVL-1",
+      "name": "Floor 1",
+      "facilityId": "FAC-1",
+      "polygon": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 70}, {"x": 10, "y": 70}],
+      "zIndex": 0,
+      "datasetId": 1
+    },
+    {
+      "id": "LVL-2",
+      "name": "Floor 2",
+      "facilityId": "FAC-1",
+      "polygon": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 70}, {"x": 10, "y": 70}],
+      "zIndex": 1,
+      "datasetId": 1
+    }
+  ],
+  "units": [
+    { "id": "U-L1-ENT", "name": "Main Entrance", "type": "ENTRANCE", "levelId": "LVL-1", "polygon": [{"x": 55, "y": 10}, {"x": 65, "y": 10}, {"x": 65, "y": 35}, {"x": 55, "y": 35}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L1-COR", "name": "Corridor L1", "type": "CORRIDOR", "levelId": "LVL-1", "polygon": [{"x": 20, "y": 35}, {"x": 100, "y": 35}, {"x": 100, "y": 45}, {"x": 20, "y": 45}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L1-ST", "name": "Stairs A", "type": "STAIRS", "levelId": "LVL-1", "polygon": [{"x": 20, "y": 20}, {"x": 30, "y": 20}, {"x": 30, "y": 35}, {"x": 20, "y": 35}], "accessible": true, "verticalConnectorId": "VCONN-ST-A", "datasetId": 1 },
+    { "id": "U-L1-EL", "name": "Elevator A", "type": "ELEVATOR", "levelId": "LVL-1", "polygon": [{"x": 20, "y": 45}, {"x": 30, "y": 45}, {"x": 30, "y": 60}, {"x": 20, "y": 60}], "accessible": true, "verticalConnectorId": "VCONN-EL-A", "datasetId": 1 },
+    { "id": "U-L1-OFC-101", "name": "Office 101", "type": "OFFICE", "levelId": "LVL-1", "polygon": [{"x": 30, "y": 45}, {"x": 50, "y": 45}, {"x": 50, "y": 60}, {"x": 30, "y": 60}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L1-OFC-102", "name": "Office 102", "type": "OFFICE", "levelId": "LVL-1", "polygon": [{"x": 50, "y": 45}, {"x": 70, "y": 45}, {"x": 70, "y": 60}, {"x": 50, "y": 60}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L1-CLS-103", "name": "Classroom 103", "type": "CLASSROOM", "levelId": "LVL-1", "polygon": [{"x": 70, "y": 45}, {"x": 100, "y": 45}, {"x": 100, "y": 60}, {"x": 70, "y": 60}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L1-OFC-104", "name": "Office 104", "type": "OFFICE", "levelId": "LVL-1", "polygon": [{"x": 30, "y": 20}, {"x": 50, "y": 20}, {"x": 50, "y": 35}, {"x": 30, "y": 35}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L1-REST", "name": "Campus Cafe", "type": "RESTAURANT", "levelId": "LVL-1", "polygon": [{"x": 70, "y": 20}, {"x": 100, "y": 20}, {"x": 100, "y": 35}, {"x": 70, "y": 35}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L2-COR", "name": "Corridor L2", "type": "CORRIDOR", "levelId": "LVL-2", "polygon": [{"x": 20, "y": 35}, {"x": 100, "y": 35}, {"x": 100, "y": 45}, {"x": 20, "y": 45}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L2-ST", "name": "Stairs A", "type": "STAIRS", "levelId": "LVL-2", "polygon": [{"x": 20, "y": 20}, {"x": 30, "y": 20}, {"x": 30, "y": 35}, {"x": 20, "y": 35}], "accessible": true, "verticalConnectorId": "VCONN-ST-A", "datasetId": 1 },
+    { "id": "U-L2-EL", "name": "Elevator A", "type": "ELEVATOR", "levelId": "LVL-2", "polygon": [{"x": 20, "y": 45}, {"x": 30, "y": 45}, {"x": 30, "y": 60}, {"x": 20, "y": 60}], "accessible": true, "verticalConnectorId": "VCONN-EL-A", "datasetId": 1 },
+    { "id": "U-L2-OFC-201", "name": "Office 201", "type": "OFFICE", "levelId": "LVL-2", "polygon": [{"x": 30, "y": 45}, {"x": 50, "y": 45}, {"x": 50, "y": 60}, {"x": 30, "y": 60}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L2-OFC-202", "name": "Office 202", "type": "OFFICE", "levelId": "LVL-2", "polygon": [{"x": 50, "y": 45}, {"x": 70, "y": 45}, {"x": 70, "y": 60}, {"x": 50, "y": 60}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L2-CLS-203", "name": "Classroom 203", "type": "CLASSROOM", "levelId": "LVL-2", "polygon": [{"x": 70, "y": 45}, {"x": 100, "y": 45}, {"x": 100, "y": 60}, {"x": 70, "y": 60}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L2-OFC-204", "name": "Office 204", "type": "OFFICE", "levelId": "LVL-2", "polygon": [{"x": 30, "y": 20}, {"x": 50, "y": 20}, {"x": 50, "y": 35}, {"x": 30, "y": 35}], "accessible": true, "datasetId": 1 },
+    { "id": "U-L2-CLS-205", "name": "Classroom 205", "type": "CLASSROOM", "levelId": "LVL-2", "polygon": [{"x": 70, "y": 20}, {"x": 100, "y": 20}, {"x": 100, "y": 35}, {"x": 70, "y": 35}], "accessible": true, "datasetId": 1 }
+  ],
+  "details": [
+    { "id": "D-L1-DR-ENT", "type": "DOOR", "levelId": "LVL-1", "line": [{"x": 59, "y": 35}, {"x": 61, "y": 35}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L1-DR-ST", "type": "DOOR", "levelId": "LVL-1", "line": [{"x": 29, "y": 35}, {"x": 29, "y": 35}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L1-DR-EL", "type": "DOOR", "levelId": "LVL-1", "line": [{"x": 29, "y": 45}, {"x": 29, "y": 45}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L1-DR-101", "type": "DOOR", "levelId": "LVL-1", "line": [{"x": 39, "y": 45}, {"x": 41, "y": 45}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L1-DR-102", "type": "DOOR", "levelId": "LVL-1", "line": [{"x": 59, "y": 45}, {"x": 61, "y": 45}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L1-DR-103", "type": "DOOR", "levelId": "LVL-1", "line": [{"x": 84, "y": 45}, {"x": 86, "y": 45}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L1-DR-104", "type": "DOOR", "levelId": "LVL-1", "line": [{"x": 39, "y": 35}, {"x": 41, "y": 35}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L1-DR-REST", "type": "DOOR", "levelId": "LVL-1", "line": [{"x": 84, "y": 35}, {"x": 86, "y": 35}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L2-DR-ST", "type": "DOOR", "levelId": "LVL-2", "line": [{"x": 29, "y": 35}, {"x": 29, "y": 35}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L2-DR-EL", "type": "DOOR", "levelId": "LVL-2", "line": [{"x": 29, "y": 45}, {"x": 29, "y": 45}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L2-DR-201", "type": "DOOR", "levelId": "LVL-2", "line": [{"x": 39, "y": 45}, {"x": 41, "y": 45}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L2-DR-202", "type": "DOOR", "levelId": "LVL-2", "line": [{"x": 59, "y": 45}, {"x": 61, "y": 45}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L2-DR-203", "type": "DOOR", "levelId": "LVL-2", "line": [{"x": 84, "y": 45}, {"x": 86, "y": 45}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L2-DR-204", "type": "DOOR", "levelId": "LVL-2", "line": [{"x": 39, "y": 35}, {"x": 41, "y": 35}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L2-DR-205", "type": "DOOR", "levelId": "LVL-2", "line": [{"x": 84, "y": 35}, {"x": 86, "y": 35}], "useType": "Door-A", "height": 2.5, "datasetId": 1 },
+    { "id": "D-L1-W-1", "type": "WALL", "levelId": "LVL-1", "line": [{"x": 20, "y": 20}, {"x": 100, "y": 20}], "useType": "Wall-i", "height": 3, "datasetId": 1 },
+    { "id": "D-L1-W-2", "type": "WALL", "levelId": "LVL-1", "line": [{"x": 20, "y": 60}, {"x": 100, "y": 60}], "useType": "Wall-i", "height": 3, "datasetId": 1 },
+    { "id": "D-L1-W-3", "type": "WALL", "levelId": "LVL-1", "line": [{"x": 20, "y": 20}, {"x": 20, "y": 60}], "useType": "Wall-i", "height": 3, "datasetId": 1 },
+    { "id": "D-L1-W-4", "type": "WALL", "levelId": "LVL-1", "line": [{"x": 100, "y": 20}, {"x": 100, "y": 60}], "useType": "Wall-i", "height": 3, "datasetId": 1 },
+    { "id": "D-L2-W-1", "type": "WALL", "levelId": "LVL-2", "line": [{"x": 20, "y": 20}, {"x": 100, "y": 20}], "useType": "Wall-i", "height": 3, "datasetId": 1 },
+    { "id": "D-L2-W-2", "type": "WALL", "levelId": "LVL-2", "line": [{"x": 20, "y": 60}, {"x": 100, "y": 60}], "useType": "Wall-i", "height": 3, "datasetId": 1 },
+    { "id": "D-L2-W-3", "type": "WALL", "levelId": "LVL-2", "line": [{"x": 20, "y": 20}, {"x": 20, "y": 60}], "useType": "Wall-i", "height": 3, "datasetId": 1 },
+    { "id": "D-L2-W-4", "type": "WALL", "levelId": "LVL-2", "line": [{"x": 100, "y": 20}, {"x": 100, "y": 60}], "useType": "Wall-i", "height": 3, "datasetId": 1 }
+  ]
+}

@@ -1,56 +1,33 @@
 
 import { useMemo } from 'react';
-import type { CampusData, Unit, Graph, GraphNode, GraphEdge, Polygon, Point } from '../types';
-import { UnitType, AccessibilityFilter } from '../types';
+import type { CampusData, Graph, GraphEdge, GraphNode, Point, Polygon, Unit, Waypoint } from '../types';
+import { AccessibilityFilter, UnitType } from '../types';
 
-// Helper to check if two polygons are adjacent (share an edge of non-zero length)
-const arePolygonsAdjacent = (poly1: Polygon, poly2: Polygon): boolean => {
-  for (let i = 0; i < poly1.length; i++) {
-    const p1 = poly1[i];
-    const p2 = poly1[(i + 1) % poly1.length];
+// --- GEOMETRY HELPERS ---
+const EPSILON = 1e-9;
 
-    for (let j = 0; j < poly2.length; j++) {
-      const q1 = poly2[j];
-      const q2 = poly2[(j + 1) % poly2.length];
+const getHaversineDistance = (p1: Point, p2: Point): number => {
+    if (Math.hypot(p1.x - p2.x, p1.y - p2.y) < EPSILON) return 0;
+    const R = 6371e3; // metres
+    const φ1 = p1.y * Math.PI/180;
+    const φ2 = p2.y * Math.PI/180;
+    const Δφ = (p2.y-p1.y) * Math.PI/180;
+    const Δλ = (p2.x-p1.x) * Math.PI/180;
 
-      // Check for collinearity and overlap, ignoring single point touches.
-      const isVertical = Math.abs(p1.x - p2.x) < 1e-9 && Math.abs(q1.x - q2.x) < 1e-9 && Math.abs(p1.x - q1.x) < 1e-9;
-      const isHorizontal = Math.abs(p1.y - p2.y) < 1e-9 && Math.abs(q1.y - q2.y) < 1e-9 && Math.abs(p1.y - q1.y) < 1e-9;
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-      if (isVertical) {
-        const p_min_y = Math.min(p1.y, p2.y);
-        const p_max_y = Math.max(p1.y, p2.y);
-        const q_min_y = Math.min(q1.y, q2.y);
-        const q_max_y = Math.max(q1.y, q2.y);
+    return R * c;
+};
 
-        const overlap_start = Math.max(p_min_y, q_min_y);
-        const overlap_end = Math.min(p_max_y, q_max_y);
-        
-        // If overlap length is greater than a tiny epsilon, they are adjacent.
-        if (overlap_end > overlap_start) {
-          return true;
-        }
-      }
-
-      if (isHorizontal) {
-        const p_min_x = Math.min(p1.x, p2.x);
-        const p_max_x = Math.max(p1.x, p2.x);
-        const q_min_x = Math.min(q1.x, q2.x);
-        const q_max_x = Math.max(q1.x, q2.x);
-
-        const overlap_start = Math.max(p_min_x, q_min_x);
-        const overlap_end = Math.min(p_max_x, q_max_x);
-        
-        if (overlap_end > overlap_start) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
+const getEuclideanDistance = (p1: Point, p2: Point): number => {
+    return Math.hypot(p2.x - p1.x, p2.y - p1.y);
 };
 
 const getPolygonCenter = (polygon: Polygon): Point => {
+    if (polygon.length === 0) return { x: 0, y: 0 };
     const center = polygon.reduce(
         (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
         { x: 0, y: 0 }
@@ -60,142 +37,208 @@ const getPolygonCenter = (polygon: Polygon): Point => {
     return center;
 };
 
+const isPointOnSegment = (p: Point, a: Point, b: Point): boolean => {
+    const crossProduct = (p.y - a.y) * (b.x - a.x) - (p.x - a.x) * (b.y - a.y);
+    if (Math.abs(crossProduct) > EPSILON) return false;
+    const dotProduct = (p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y);
+    if (dotProduct < 0) return false;
+    const squaredLength = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+    if (dotProduct > squaredLength) return false;
+    return true;
+};
+
+const areCollinear = (p1: Point, p2: Point, p3: Point): boolean => {
+    const crossProduct = (p2.y - p1.y) * (p3.x - p2.x) - (p2.x - p1.x) * (p3.y - p2.y);
+    const dist1 = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const dist2 = Math.hypot(p3.x - p2.x, p3.y - p2.y);
+    return Math.abs(crossProduct) < EPSILON * (dist1 + dist2);
+};
+
+const findSharedEdge = (poly1: Polygon, poly2: Polygon): [Point, Point] | null => {
+    for (let i = 0; i < poly1.length; i++) {
+        const p1 = poly1[i];
+        const p2 = poly1[(i + 1) % poly1.length];
+        for (let j = 0; j < poly2.length; j++) {
+            const q1 = poly2[j];
+            const q2 = poly2[(j + 1) % poly2.length];
+            const p1_eq_q2 = Math.hypot(p1.x - q2.x, p1.y - q2.y) < EPSILON;
+            const p2_eq_q1 = Math.hypot(p2.x - q1.x, p2.y - q1.y) < EPSILON;
+            if (p1_eq_q2 && p2_eq_q1) return [p1, p2];
+            if (areCollinear(p1, p2, q1) && areCollinear(p1, p2, q2)) {
+                const overlapPoints: Point[] = [];
+                if (isPointOnSegment(p1, q1, q2)) overlapPoints.push(p1);
+                if (isPointOnSegment(p2, q1, q2)) overlapPoints.push(p2);
+                if (isPointOnSegment(q1, p1, p2)) overlapPoints.push(q1);
+                if (isPointOnSegment(q2, p1, p2)) overlapPoints.push(q2);
+                const uniqueKeys = new Set<string>();
+                const uniquePoints = overlapPoints.filter(p => {
+                    const key = `${p.x.toFixed(6)},${p.y.toFixed(6)}`;
+                    if (uniqueKeys.has(key)) return false;
+                    uniqueKeys.add(key);
+                    return true;
+                });
+                if (uniquePoints.length >= 2) {
+                    let maxDist = -1;
+                    let pStart: Point | null = null;
+                    let pEnd: Point | null = null;
+                    for (let k = 0; k < uniquePoints.length; k++) {
+                        for (let l = k + 1; l < uniquePoints.length; l++) {
+                            const dist = Math.hypot(uniquePoints[k].x - uniquePoints[l].x, uniquePoints[k].y - uniquePoints[l].y);
+                            if (dist > maxDist) {
+                                maxDist = dist;
+                                pStart = uniquePoints[k];
+                                pEnd = uniquePoints[l];
+                            }
+                        }
+                    }
+                    if (pStart && pEnd && maxDist > EPSILON) return [pStart, pEnd];
+                }
+            }
+        }
+    }
+    return null;
+};
 
 const buildGraph = (data: CampusData): Graph => {
-  const graph: Graph = {
-    nodes: new Map(),
-    edges: new Map(),
-  };
+    const nodes = new Map<string, GraphNode>();
+    const edges = new Map<string, GraphEdge[]>();
 
-  const traversableUnits = data.units.filter(u => u.type !== UnitType.RESTRICTED);
+    const addEdge = (from: string, to: string, weight: number, type: 'horizontal' | 'vertical') => {
+        if (!edges.has(from)) edges.set(from, []);
+        edges.get(from)!.push({ from, to, weight, type });
+    };
 
-  traversableUnits.forEach(unit => {
-    graph.nodes.set(unit.id, { id: unit.id, unit });
-    graph.edges.set(unit.id, []);
-  });
-  
-  const addEdge = (from: Unit, to: Unit, type: 'horizontal' | 'vertical') => {
-      const existingEdge = graph.edges.get(from.id)?.find(e => e.to === to.id);
-      if (existingEdge) return; // Avoid duplicate edges
-
-      const center1 = getPolygonCenter(from.polygon);
-      const center2 = getPolygonCenter(to.polygon);
-      const weight = Math.hypot(center2.x-center1.x, center2.y-center1.y) + (type === 'vertical' ? 1000 : 0); // Add extra weight for vertical travel
-      
-      graph.edges.get(from.id)?.push({ from: from.id, to: to.id, weight, type });
-      graph.edges.get(to.id)?.push({ from: to.id, to: from.id, weight, type });
-  };
-
-  const isTransitional = (type: UnitType) => [
-      UnitType.CORRIDOR,
-      UnitType.STAIRS,
-      UnitType.ELEVATOR,
-      UnitType.ENTRANCE
-  ].includes(type);
-
-  // Horizontal connections (adjacency)
-  for (let i = 0; i < traversableUnits.length; i++) {
-    for (let j = i + 1; j < traversableUnits.length; j++) {
-      const unitA = traversableUnits[i];
-      const unitB = traversableUnits[j];
-
-      if (unitA.levelId === unitB.levelId && arePolygonsAdjacent(unitA.polygon, unitB.polygon)) {
-          // Connect units if one of them is a transitional space (corridor, stairs, etc.)
-          // This allows rooms to connect to corridors, but not to other rooms directly.
-        if (isTransitional(unitA.type) || isTransitional(unitB.type)) {
-          addEdge(unitA, unitB, 'horizontal');
+    data.units.forEach(unit => {
+        if (unit.accessible) {
+            nodes.set(unit.id, { id: unit.id, unit });
         }
-      }
-    }
-  }
+    });
 
-  // Vertical connections (stairs/elevators)
-  const verticalConnectors = new Map<string, Unit[]>();
-  traversableUnits.forEach(unit => {
-    if (unit.verticalConnectorId) {
-      if (!verticalConnectors.has(unit.verticalConnectorId)) {
-        verticalConnectors.set(unit.verticalConnectorId, []);
-      }
-      verticalConnectors.get(unit.verticalConnectorId)?.push(unit);
-    }
-  });
+    const unitsByLevel = new Map<string, Unit[]>();
+    data.units.forEach(u => {
+        if (!u.accessible) return;
+        if (!unitsByLevel.has(u.levelId)) unitsByLevel.set(u.levelId, []);
+        unitsByLevel.get(u.levelId)!.push(u);
+    });
 
-  verticalConnectors.forEach(units => {
-    for (let i = 0; i < units.length; i++) {
-      for (let j = i + 1; j < units.length; j++) {
-        addEdge(units[i], units[j], 'vertical');
-      }
-    }
-  });
+    const transitionalTypes = [UnitType.CORRIDOR, UnitType.STAIRS, UnitType.ELEVATOR, UnitType.ENTRANCE];
+    unitsByLevel.forEach(unitsOnLevel => {
+        for (let i = 0; i < unitsOnLevel.length; i++) {
+            for (let j = i + 1; j < unitsOnLevel.length; j++) {
+                const unitA = unitsOnLevel[i];
+                const unitB = unitsOnLevel[j];
+                const isTransitionalLink = transitionalTypes.includes(unitA.type) || transitionalTypes.includes(unitB.type);
+                if (!isTransitionalLink) continue;
 
-  return graph;
+                if (findSharedEdge(unitA.polygon, unitB.polygon)) {
+                    const centerA = getPolygonCenter(unitA.polygon);
+                    const centerB = getPolygonCenter(unitB.polygon);
+                    const weight = getEuclideanDistance(centerA, centerB);
+                    addEdge(unitA.id, unitB.id, weight, 'horizontal');
+                    addEdge(unitB.id, unitA.id, weight, 'horizontal');
+                }
+            }
+        }
+    });
+
+    const verticalConnectors = new Map<string, Unit[]>();
+    data.units.forEach(unit => {
+        if (unit.accessible && unit.verticalConnectorId && (unit.type === UnitType.STAIRS || unit.type === UnitType.ELEVATOR)) {
+            if (!verticalConnectors.has(unit.verticalConnectorId)) verticalConnectors.set(unit.verticalConnectorId, []);
+            verticalConnectors.get(unit.verticalConnectorId)!.push(unit);
+        }
+    });
+
+    verticalConnectors.forEach(units => {
+        units.sort((a, b) => (data.levels.find(l => l.id === a.levelId)?.zIndex ?? 0) - (data.levels.find(l => l.id === b.levelId)?.zIndex ?? 0));
+        for (let i = 0; i < units.length - 1; i++) {
+            const unitA = units[i];
+            const unitB = units[i + 1];
+            const weight = 1000;
+            addEdge(unitA.id, unitB.id, weight, 'vertical');
+            addEdge(unitB.id, unitA.id, weight, 'vertical');
+        }
+    });
+
+    return { nodes, edges };
 };
 
 const findShortestPath = (graph: Graph, startId: string, endId: string, filter: AccessibilityFilter): string[] | null => {
-  const distances: Record<string, number> = {};
-  const previous: Record<string, string | null> = {};
-  const queue: Set<string> = new Set();
-  
-  graph.nodes.forEach(node => {
-    distances[node.id] = Infinity;
-    previous[node.id] = null;
-    queue.add(node.id);
-  });
+    const distances: Record<string, number> = {};
+    const previous: Record<string, string | null> = {};
+    const queue = new Set<string>();
 
-  distances[startId] = 0;
-
-  while (queue.size > 0) {
-    let u: string | null = null;
-    queue.forEach(id => {
-      if (u === null || distances[id] < distances[u!]) {
-        u = id;
-      }
+    graph.nodes.forEach(node => {
+        distances[node.id] = Infinity;
+        previous[node.id] = null;
+        queue.add(node.id);
     });
+    distances[startId] = 0;
 
-    if (u === null || u === endId) break;
-    queue.delete(u);
-    
-    const uNode = graph.nodes.get(u);
-    if(!uNode) continue;
+    while (queue.size > 0) {
+        let u: string | null = null;
+        for (const id of queue) {
+            if (u === null || distances[id] < distances[u!]) u = id;
+        }
+        if (u === null || u === endId) break;
+        queue.delete(u!);
+        
+        const uNode = graph.nodes.get(u!);
+        if (!uNode) continue;
 
-    const neighbors = graph.edges.get(u) || [];
-    for (const edge of neighbors) {
-      const v = edge.to;
-      const vNode = graph.nodes.get(v);
-      if(!vNode) continue;
-
-      // Apply filters
-      if (filter === AccessibilityFilter.ELEVATOR_ONLY && edge.type === 'vertical' && uNode.unit.type !== UnitType.ELEVATOR) {
-        continue;
-      }
-
-      const alt = distances[u] + edge.weight;
-      if (alt < distances[v]) {
-        distances[v] = alt;
-        previous[v] = u;
-      }
+        (graph.edges.get(u!) || []).forEach(edge => {
+            const vNode = graph.nodes.get(edge.to);
+            if (!vNode) return;
+            
+            if (filter === AccessibilityFilter.ELEVATOR_ONLY && edge.type === 'vertical') {
+                if (uNode.unit.type !== UnitType.ELEVATOR || vNode.unit.type !== UnitType.ELEVATOR) {
+                    return;
+                }
+            }
+            const alt = distances[u!] + edge.weight;
+            if (alt < distances[edge.to]) {
+                distances[edge.to] = alt;
+                previous[edge.to] = u;
+            }
+        });
     }
-  }
 
-  const path: string[] = [];
-  let current: string | null = endId;
-  while (current !== null) {
-    path.unshift(current);
-    if(distances[current] === Infinity) return null; // No path found
-    current = previous[current];
-  }
-
-  return path[0] === startId ? path : null;
+    const path: string[] = [];
+    let current: string | null = endId;
+    while (current) {
+        path.unshift(current);
+        if (distances[current] === Infinity) return null;
+        current = previous[current];
+    }
+    return path[0] === startId ? path : null;
 };
 
-
 export const useGraph = (data: CampusData) => {
-  const graph = useMemo(() => buildGraph(data), [data]);
+    const graph = useMemo(() => buildGraph(data), [data]);
 
-  const getPath = (startId: string, endId: string, filter: AccessibilityFilter) => {
-    if (!startId || !endId) return null;
-    return findShortestPath(graph, startId, endId, filter);
-  };
+    const getPath = (startId: string, endId: string, filter: AccessibilityFilter): string[] | null => {
+        if (!startId || !endId || !graph.nodes.has(startId) || !graph.nodes.has(endId)) return null;
+        return findShortestPath(graph, startId, endId, filter);
+    };
 
-  return { graph, getPath, getPolygonCenter };
+    const getPathWaypoints = (path: string[]): Waypoint[] => {
+        if (!path) return [];
+        return path.map(unitId => {
+            const unit = graph.nodes.get(unitId)?.unit;
+            if (!unit) return null;
+            return { point: getPolygonCenter(unit.polygon), levelId: unit.levelId };
+        }).filter((wp): wp is Waypoint => !!wp);
+    };
+
+    const calculatePathDistance = (waypoints: Waypoint[]): number => {
+        let distance = 0;
+        for (let i = 0; i < waypoints.length - 1; i++) {
+            if (waypoints[i].levelId === waypoints[i+1].levelId) {
+                distance += getHaversineDistance(waypoints[i].point, waypoints[i+1].point);
+            }
+        }
+        return distance;
+    };
+
+    return { graph, getPath, getPathWaypoints, calculatePathDistance };
 };

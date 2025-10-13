@@ -18,10 +18,12 @@ export const EndPinIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 
 // FIX: Update NavigatorIcon component props to accept standard SVG attributes.
 // This allows passing props like 'filter' and 'transform' for SVG effects.
-export const NavigatorIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+// FIX: Render children to allow for animations like <animateMotion>.
+export const NavigatorIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ children, ...props }) => (
     <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
         <circle cx="12" cy="12" r="10" />
         <circle cx="12" cy="12" r="3" />
+        {children}
     </svg>
 );
 

@@ -1,6 +1,6 @@
+
 import initSqlJs, { type Database } from 'sql.js';
-import type { CampusData, Dataset, Facility, Level, Unit, Detail, User, Role } from '../types';
-import { campusData as defaultCampusData } from '../data/campusData';
+import type { CampusData, Dataset, Facility, Level, Unit, Detail, User, Role, Site } from '../types';
 
 // --- Database Singleton ---
 let db: Database | null = null;
@@ -15,8 +15,11 @@ async function getIDB() {
     const request = indexedDB.open(dbName, 1);
     request.onerror = () => reject("Error opening IndexedDB");
     request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore(storeName);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName);
+      }
     };
   });
 }
@@ -48,31 +51,42 @@ const objectify = (stmt: any) => {
   while (stmt.step()) {
     results.push(stmt.getAsObject());
   }
+  stmt.free();
   return results;
 }
 
 const createTables = () => {
     if (!db) return;
     db.exec(`
-        CREATE TABLE datasets (
+        CREATE TABLE IF NOT EXISTS datasets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             createdAt TEXT NOT NULL,
-            isActive BOOLEAN NOT NULL
+            isActive BOOLEAN NOT NULL,
+            originLat REAL,
+            originLon REAL
         );
-        CREATE TABLE users (
+        CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             password TEXT NOT NULL,
             role TEXT NOT NULL
         );
-        CREATE TABLE facilities (
+         CREATE TABLE IF NOT EXISTS sites (
             id TEXT,
             datasetId INTEGER,
             name TEXT,
             polygon TEXT,
             PRIMARY KEY (id, datasetId)
         );
-        CREATE TABLE levels (
+        CREATE TABLE IF NOT EXISTS facilities (
+            id TEXT,
+            datasetId INTEGER,
+            siteId TEXT,
+            name TEXT,
+            polygon TEXT,
+            PRIMARY KEY (id, datasetId)
+        );
+        CREATE TABLE IF NOT EXISTS levels (
             id TEXT,
             datasetId INTEGER,
             name TEXT,
@@ -81,7 +95,7 @@ const createTables = () => {
             zIndex INTEGER,
             PRIMARY KEY (id, datasetId)
         );
-        CREATE TABLE units (
+        CREATE TABLE IF NOT EXISTS units (
             id TEXT,
             datasetId INTEGER,
             name TEXT,
@@ -89,14 +103,17 @@ const createTables = () => {
             levelId TEXT,
             polygon TEXT,
             verticalConnectorId TEXT,
+            accessible BOOLEAN,
             PRIMARY KEY (id, datasetId)
         );
-        CREATE TABLE details (
+        CREATE TABLE IF NOT EXISTS details (
             id TEXT,
             datasetId INTEGER,
             type TEXT,
             levelId TEXT,
             line TEXT,
+            useType TEXT,
+            height REAL,
             PRIMARY KEY (id, datasetId)
         );
     `);
@@ -105,12 +122,13 @@ const createTables = () => {
 const seedDatabase = () => {
     if (!db) return;
     // Seed users
-    db.exec(`
-        INSERT INTO users (username, password, role) VALUES ('santanu', '111', 'admin');
-        INSERT INTO users (username, password, role) VALUES ('san', '111', 'viewer');
-    `);
-    // Seed default data
-    addDataset('Default Campus Layout', defaultCampusData, true);
+    const userCount = db.exec("SELECT COUNT(*) FROM users")[0].values[0][0];
+    if(userCount === 0) {
+        db.exec(`
+            INSERT INTO users (username, password, role) VALUES ('santanu', '111', 'admin');
+            INSERT INTO users (username, password, role) VALUES ('san', '111', 'viewer');
+        `);
+    }
 }
 
 
@@ -121,8 +139,6 @@ export const dbService = {
         if (isInitialized) return;
 
         const SQL = await initSqlJs({
-            // The esm.sh version of sql.js needs help finding its wasm file.
-            // Point it to the correct file on the same CDN to avoid version mismatches and loading errors.
             locateFile: file => `https://esm.sh/sql.js@1.10.3/dist/${file}`
         });
         const savedDb = await loadDbFromIdb();
@@ -130,13 +146,27 @@ export const dbService = {
         if (savedDb) {
             console.log("Loading database from persistence...");
             db = new SQL.Database(savedDb);
+             // Migration logic for existing databases
+            try {
+                const tableInfoRes = db.exec("PRAGMA table_info(datasets)");
+                if (tableInfoRes.length > 0) {
+                    const columns = tableInfoRes[0].values.map(row => row[1] as string);
+                    if (!columns.includes('originLat')) {
+                        db.exec("ALTER TABLE datasets ADD COLUMN originLat REAL;");
+                    }
+                    if (!columns.includes('originLon')) {
+                        db.exec("ALTER TABLE datasets ADD COLUMN originLon REAL;");
+                    }
+                }
+            } catch (e) { console.error("Error during DB migration", e); }
         } else {
-            console.log("Creating new database and seeding...");
+            console.log("Creating new database...");
             db = new SQL.Database();
-            createTables();
-            seedDatabase();
-            await this.save();
         }
+        
+        createTables();
+        seedDatabase();
+        await this.save();
         isInitialized = true;
     },
 
@@ -144,7 +174,6 @@ export const dbService = {
         if (!db) return;
         const data = db.export();
         await saveDbToIdb(data);
-        console.log("Database saved.");
     },
 
     async getUser(username: string, password: string): Promise<User | null> {
@@ -158,20 +187,21 @@ export const dbService = {
         return null;
     },
     
-    async getActiveCampusData(): Promise<CampusData> {
+    async getCampusDataForId(datasetId: number): Promise<CampusData> {
         if (!db) throw new Error("DB not initialized");
-        
-        const activeDataset = objectify(db.prepare("SELECT id FROM datasets WHERE isActive = 1"))[0];
-        if (!activeDataset) return { facilities: [], levels: [], units: [], details: [] };
-        
-        const datasetId = activeDataset.id;
-
+        const sites = objectify(db.prepare(`SELECT * FROM sites WHERE datasetId = ${datasetId}`)).map(s => ({ ...s, polygon: JSON.parse(s.polygon as string)})) as Site[];
         const facilities = objectify(db.prepare(`SELECT * FROM facilities WHERE datasetId = ${datasetId}`)).map(f => ({ ...f, polygon: JSON.parse(f.polygon as string)})) as Facility[];
         const levels = objectify(db.prepare(`SELECT * FROM levels WHERE datasetId = ${datasetId}`)).map(l => ({...l, polygon: JSON.parse(l.polygon as string)})) as Level[];
-        const units = objectify(db.prepare(`SELECT * FROM units WHERE datasetId = ${datasetId}`)).map(u => ({...u, polygon: JSON.parse(u.polygon as string)})) as Unit[];
+        const units = objectify(db.prepare(`SELECT * FROM units WHERE datasetId = ${datasetId}`)).map(u => ({...u, polygon: JSON.parse(u.polygon as string), accessible: u.accessible === 1})) as Unit[];
         const details = objectify(db.prepare(`SELECT * FROM details WHERE datasetId = ${datasetId}`)).map(d => ({...d, line: JSON.parse(d.line as string)})) as Detail[];
-
-        return { facilities, levels, units, details };
+        return { sites, facilities, levels, units, details };
+    },
+    
+    async getActiveCampusData(): Promise<CampusData> {
+        if (!db) throw new Error("DB not initialized");
+        const activeDataset = objectify(db.prepare("SELECT id FROM datasets WHERE isActive = 1"))[0];
+        if (!activeDataset) return { sites: [], facilities: [], levels: [], units: [], details: [] };
+        return this.getCampusDataForId(activeDataset.id as number);
     },
 
     async getDatasets(): Promise<Dataset[]> {
@@ -186,47 +216,108 @@ export const dbService = {
         await this.save();
     },
 
-    async addDataset(name: string, data: CampusData, isActive: boolean = false): Promise<void> {
+    async addDataset(
+        name: string,
+        data: CampusData,
+        isActive: boolean = false,
+        onProgress?: (progress: number) => void,
+        mapOrigin?: { lat: number; lon: number }
+    ): Promise<void> {
         if (!db) throw new Error("DB not initialized");
-        
+        onProgress?.(0);
+
         if (isActive) {
             db.exec("UPDATE datasets SET isActive = 0");
         }
+        
+        const totalItems = (data.sites?.length || 0) +
+                           (data.facilities?.length || 0) +
+                           (data.levels?.length || 0) +
+                           (data.units?.length || 0) +
+                           (data.details?.length || 0);
+        let itemsProcessed = 0;
 
-        const stmt = db.prepare("INSERT INTO datasets (name, createdAt, isActive) VALUES (?, ?, ?)");
-        // FIX: Type 'boolean' is not assignable to type 'SqlValue'. Convert boolean to integer.
-        stmt.run([name, new Date().toISOString(), isActive ? 1 : 0]);
+        const stmt = db.prepare("INSERT INTO datasets (name, createdAt, isActive, originLat, originLon) VALUES (?, ?, ?, ?, ?)");
+        stmt.run([name, new Date().toISOString(), isActive ? 1 : 0, mapOrigin?.lat ?? null, mapOrigin?.lon ?? null]);
         stmt.free();
 
-        const datasetId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+        const datasetId = db.exec("SELECT last_insert_rowid()")[0].values[0][0] as number;
 
-        const insertFacility = db.prepare("INSERT INTO facilities (id, datasetId, name, polygon) VALUES (?, ?, ?, ?)");
-        data.facilities.forEach(f => insertFacility.run([f.id, datasetId, f.name, JSON.stringify(f.polygon)]));
-        insertFacility.free();
+        db.exec("BEGIN TRANSACTION;");
+        try {
+            const insertSite = db.prepare("INSERT INTO sites (id, datasetId, name, polygon) VALUES (?, ?, ?, ?)");
+            data.sites?.forEach(s => insertSite.run([s.id, datasetId, s.name, JSON.stringify(s.polygon)]));
+            insertSite.free();
+            itemsProcessed += (data.sites?.length || 0);
+            if (totalItems > 0) onProgress?.((itemsProcessed / totalItems) * 100);
+
+            const insertFacility = db.prepare("INSERT INTO facilities (id, datasetId, siteId, name, polygon) VALUES (?, ?, ?, ?, ?)");
+            data.facilities.forEach(f => insertFacility.run([f.id, datasetId, f.siteId, f.name, JSON.stringify(f.polygon)]));
+            insertFacility.free();
+            itemsProcessed += data.facilities.length;
+            if (totalItems > 0) onProgress?.((itemsProcessed / totalItems) * 100);
+
+            const insertLevel = db.prepare("INSERT INTO levels (id, datasetId, name, facilityId, polygon, zIndex) VALUES (?, ?, ?, ?, ?, ?)");
+            data.levels.forEach(l => insertLevel.run([l.id, datasetId, l.name, l.facilityId, JSON.stringify(l.polygon), l.zIndex]));
+            insertLevel.free();
+            itemsProcessed += data.levels.length;
+            if (totalItems > 0) onProgress?.((itemsProcessed / totalItems) * 100);
+
+            const insertUnit = db.prepare("INSERT INTO units (id, datasetId, name, type, levelId, polygon, verticalConnectorId, accessible) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            data.units.forEach(u => insertUnit.run([u.id, datasetId, u.name, u.type, u.levelId, JSON.stringify(u.polygon), u.verticalConnectorId || null, u.accessible ? 1 : 0]));
+            insertUnit.free();
+            itemsProcessed += data.units.length;
+            if (totalItems > 0) onProgress?.((itemsProcessed / totalItems) * 100);
+
+            const insertDetail = db.prepare("INSERT INTO details (id, datasetId, type, levelId, line, useType, height) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            data.details?.forEach(d => insertDetail.run([d.id, datasetId, d.type, d.levelId, JSON.stringify(d.line), d.useType, d.height]));
+            insertDetail.free();
+            itemsProcessed += (data.details?.length || 0);
+            if (totalItems > 0) onProgress?.((itemsProcessed / totalItems) * 100);
+
+            db.exec("COMMIT;");
+        } catch (e) {
+            console.error("Error during dataset insertion transaction, rolling back.", e);
+            db.exec("ROLLBACK;");
+            throw e; // Propagate error to be caught by the UI
+        }
         
-        const insertLevel = db.prepare("INSERT INTO levels (id, datasetId, name, facilityId, polygon, zIndex) VALUES (?, ?, ?, ?, ?, ?)");
-        data.levels.forEach(l => insertLevel.run([l.id, datasetId, l.name, l.facilityId, JSON.stringify(l.polygon), l.zIndex]));
-        insertLevel.free();
+        onProgress?.(100);
+        await this.save();
+    },
+    
+    async deleteDataset(id: number): Promise<void> {
+        if (!db) throw new Error("DB not initialized");
 
-        const insertUnit = db.prepare("INSERT INTO units (id, datasetId, name, type, levelId, polygon, verticalConnectorId) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        data.units.forEach(u => insertUnit.run([u.id, datasetId, u.name, u.type, u.levelId, JSON.stringify(u.polygon), u.verticalConnectorId || null]));
-        insertUnit.free();
+        const allDatasets = await this.getDatasets();
+        if (allDatasets.length <= 1) {
+            throw new Error("Cannot delete the last dataset.");
+        }
 
-        const insertDetail = db.prepare("INSERT INTO details (id, datasetId, type, levelId, line) VALUES (?, ?, ?, ?, ?)");
-        data.details?.forEach(d => insertDetail.run([d.id, datasetId, d.type, d.levelId, JSON.stringify(d.line)]));
-        insertDetail.free();
+        const datasetToDelete = allDatasets.find(d => d.id === id);
+
+        db.exec("BEGIN TRANSACTION;");
+        try {
+            if (datasetToDelete?.isActive) {
+                const nextActiveDataset = allDatasets.find(d => d.id !== id);
+                if (nextActiveDataset) {
+                    db.exec(`UPDATE datasets SET isActive = 1 WHERE id = ${nextActiveDataset.id}`);
+                }
+            }
+
+            const tables = ['sites', 'facilities', 'levels', 'units', 'details'];
+            for (const table of tables) {
+                db.exec(`DELETE FROM ${table} WHERE datasetId = ${id}`);
+            }
+            db.exec(`DELETE FROM datasets WHERE id = ${id}`);
+
+            db.exec("COMMIT;");
+        } catch (e) {
+            console.error("Error during dataset deletion transaction, rolling back.", e);
+            db.exec("ROLLBACK;");
+            throw e;
+        }
 
         await this.save();
     },
-
-    async resetDatabase(): Promise<void> {
-        if (!db) throw new Error("DB not initialized");
-        const name = `Default Campus (Reset ${new Date().toLocaleTimeString()})`;
-        await this.addDataset(name, defaultCampusData, false);
-    }
-}
-
-function addDataset(name: string, data: CampusData, isActive: boolean = false) {
-    if (!db) return;
-    dbService.addDataset(name, data, isActive);
 }

@@ -1,5 +1,5 @@
 {
-  "name": "Indoor Navigator",
+  "name": "Indoor Navigator 1",
   "description": "A React application for indoor pathfinding and visualization. It builds a spatial graph to find and animate navigable pathways between units, respecting accessibility constraints and restricted areas.",
   "requestFramePermissions": []
 }

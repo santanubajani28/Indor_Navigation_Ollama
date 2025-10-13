@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Navigation from './components/Navigation';
 import MapPage from './pages/MapPage';
@@ -9,27 +10,48 @@ import { dbService } from './services/db';
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState<Page>('map');
-  const [currentData, setCurrentData] = useState<CampusData>({ facilities: [], levels: [], units: [], details: [] });
+  const [currentData, setCurrentData] = useState<CampusData>({ sites: [], facilities: [], levels: [], units: [], details: [] });
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [loadingMessage, setLoadingMessage] = useState('Initializing Database...');
+  const [loadingMessage, setLoadingMessage] = useState('Initializing...');
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [mapOrigin, setMapOrigin] = useState<{ lat: number; lon: number } | null>(null);
 
   const loadData = useCallback(async () => {
       setLoadingMessage('Fetching campus data...');
       const data = await dbService.getActiveCampusData();
       setCurrentData(data);
+      
+      setLoadingMessage('Loading datasets...');
       const datasetList = await dbService.getDatasets();
       setDatasets(datasetList);
+
+      const activeDataset = datasetList.find(d => d.isActive);
+      if (activeDataset && activeDataset.originLat != null && activeDataset.originLon != null) {
+          setMapOrigin({ lat: activeDataset.originLat, lon: activeDataset.originLon });
+      } else if (data.sites.length > 0 && data.sites[0].polygon.length > 0){
+          // Fallback to center of first site if origin not set
+          const allPoints = data.sites.flatMap(s => s.polygon);
+          const minLon = Math.min(...allPoints.map(p => p.x));
+          const maxLon = Math.max(...allPoints.map(p => p.x));
+          const minLat = Math.min(...allPoints.map(p => p.y));
+          const maxLat = Math.max(...allPoints.map(p => p.y));
+          setMapOrigin({ lon: minLon + (maxLon - minLon) / 2, lat: minLat + (maxLat - minLat) / 2 });
+      } else {
+          setMapOrigin({ lat: 40.7128, lon: -74.0060 });
+      }
+
       setLoading(false);
   }, []);
 
   useEffect(() => {
-    const initDb = async () => {
+    const init = async () => {
       setLoading(true);
+      setLoadingMessage('Initializing Database...');
       await dbService.init();
       await loadData();
     };
-    initDb();
+    init();
   }, [loadData]);
 
 
@@ -47,23 +69,35 @@ const App: React.FC = () => {
     setCurrentPage('map'); // Reset to default page on logout
   };
 
-  const handleDataUpload = async (name: string, newData: CampusData) => {
+  const handleDataUpload = async (
+      name: string,
+      uploadResult: { campusData: CampusData; mapOrigin?: { lat: number, lon: number } }
+  ) => {
     setLoading(true);
     setLoadingMessage('Importing new dataset...');
-    await dbService.addDataset(name, newData, true); // Make new upload active
-    await loadData(); // Reload all data
-    setLoading(false);
-    alert('New dataset loaded successfully!');
-    setCurrentPage('map'); // Switch to map view after successful upload
-  };
-  
-  const handleResetData = async () => {
-    setLoading(true);
-    setLoadingMessage('Adding new default dataset...');
-    await dbService.resetDatabase();
-    await loadData();
-    setLoading(false);
-    alert('A new dataset with the default campus layout has been added.');
+    setUploadProgress(0);
+
+    try {
+      await dbService.addDataset(
+          name,
+          uploadResult.campusData,
+          true,
+          (progress) => {
+            setUploadProgress(progress);
+            setLoadingMessage(`Importing... ${Math.round(progress)}%`);
+          },
+          uploadResult.mapOrigin
+      );
+      await loadData(); // Reload all data, which will update the map origin
+      alert('New dataset loaded successfully!');
+      setCurrentPage('map'); // Switch to map view after successful upload
+    } catch (e) {
+      console.error("Failed to upload dataset:", e);
+      alert(`Data upload failed. Please check the file format and console for errors. Error: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setLoading(false);
+      setUploadProgress(null);
+    }
   };
   
   const handleSwitchDataset = async (id: number) => {
@@ -74,11 +108,28 @@ const App: React.FC = () => {
     setLoading(false);
   }
 
+  const handleDeleteDataset = async (id: number) => {
+    if (window.confirm('Are you sure you want to delete this dataset? This action cannot be undone.')) {
+        setLoading(true);
+        setLoadingMessage('Deleting dataset...');
+        try {
+            await dbService.deleteDataset(id);
+            await loadData();
+            alert('Dataset deleted successfully!');
+        } catch (e) {
+            console.error("Failed to delete dataset:", e);
+            alert(`Dataset deletion failed. Error: ${e instanceof Error ? e.message : String(e)}`);
+        } finally {
+            setLoading(false);
+        }
+    }
+  };
+
   if (!currentUser) {
     return <LoginPage onLogin={handleLogin} />;
   }
   
-  if (loading) {
+  if (loading || !mapOrigin) {
     return (
        <div className="absolute inset-0 bg-gray-900/90 flex items-center justify-center z-50">
           <div className="flex flex-col items-center">
@@ -87,10 +138,21 @@ const App: React.FC = () => {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
               <span className="text-xl text-white mt-4">{loadingMessage}</span>
+               {uploadProgress !== null && (
+                  <div className="w-64 mt-4 bg-gray-700 rounded-full h-2.5">
+                      <div
+                          className="bg-indigo-500 h-2.5 rounded-full transition-all duration-150"
+                          style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                  </div>
+              )}
           </div>
       </div>
     )
   }
+
+  const activeDataset = datasets.find(d => d.isActive);
+  const activeDatasetName = activeDataset ? activeDataset.name : 'No active dataset';
 
   return (
     <div className="flex flex-col h-screen w-screen bg-gray-900 text-gray-100 overflow-hidden">
@@ -101,13 +163,14 @@ const App: React.FC = () => {
         onLogout={handleLogout}
       />
       <main className="flex-1 overflow-hidden">
-        {currentPage === 'map' && <MapPage campusData={currentData} />}
+        {currentPage === 'map' && <MapPage campusData={currentData} mapOrigin={mapOrigin} activeDatasetName={activeDatasetName} />}
         {currentPage === 'admin' && (
             <AdminPage 
                 datasets={datasets}
+                campusData={currentData}
                 onDataUpload={handleDataUpload} 
-                onResetData={handleResetData}
                 onSwitchDataset={handleSwitchDataset} 
+                onDeleteDataset={handleDeleteDataset}
             />
         )}
       </main>

@@ -8,6 +8,7 @@ export const UNIT_TYPE_COLORS: Record<UnitType, string> = {
   [UnitType.OFFICE]: 'bg-teal-800',
   [UnitType.RESTRICTED]: 'bg-red-900',
   [UnitType.ENTRANCE]: 'bg-green-600',
+  [UnitType.RESTAURANT]: 'bg-amber-700',
 };
 
 export const UNIT_TYPE_BORDERS: Record<UnitType, string> = {
@@ -18,6 +19,7 @@ export const UNIT_TYPE_BORDERS: Record<UnitType, string> = {
     [UnitType.OFFICE]: 'stroke-teal-500',
     [UnitType.RESTRICTED]: 'stroke-red-600',
     [UnitType.ENTRANCE]: 'stroke-green-400',
+    [UnitType.RESTAURANT]: 'stroke-amber-500',
 };
 
 // New constants for the 3D viewer
@@ -29,6 +31,7 @@ export const UNIT_TYPE_COLORS_3D: Record<UnitType, number> = {
   [UnitType.OFFICE]: 0x115E59,
   [UnitType.RESTRICTED]: 0x7F1D1D,
   [UnitType.ENTRANCE]: 0x16A34A,
+  [UnitType.RESTAURANT]: 0xb45309,
 };
 
 export const DETAIL_TYPE_COLORS_3D: Record<DetailType, number> = {
@@ -44,3 +47,5 @@ export const MAP_HEIGHT = 800;
 
 export const UNIT_HEIGHT = 3; // 3 meters
 export const LEVEL_SEPARATION = 5; // 5 meters of space between floors
+
+export const PATH_ANIMATION_SPEED = 15; // meters per second for 3D path animation

@@ -1,21 +1,32 @@
 
-import React from 'react';
-import { UnitType } from '../types';
+import React, { useMemo } from 'react';
+import type { Unit, UnitType } from '../types';
 import { UNIT_TYPE_COLORS } from '../constants';
 
-const Legend: React.FC = () => {
+interface LegendProps {
+  units: Unit[];
+}
+
+const Legend: React.FC<LegendProps> = ({ units }) => {
+  const availableUnitTypes = useMemo(() => {
+    const types = new Set<UnitType>();
+    units.forEach(unit => types.add(unit.type));
+    // Sort to ensure a consistent order every time
+    return Array.from(types).sort((a, b) => a.localeCompare(b));
+  }, [units]);
+
   return (
     <div className="p-4 bg-gray-800 rounded-lg shadow-lg">
       <h3 className="text-lg font-bold mb-3 text-gray-200">Legend</h3>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-        {Object.entries(UNIT_TYPE_COLORS).map(([type, colorClass]) => (
+        {availableUnitTypes.map(type => (
           <div key={type} className="flex items-center space-x-2">
-            <div className={`w-4 h-4 rounded-sm ${colorClass}`}></div>
+            <div className={`w-4 h-4 rounded-sm ${UNIT_TYPE_COLORS[type]}`}></div>
             <span className="text-sm capitalize text-gray-300">{type.toLowerCase().replace('_', ' ')}</span>
           </div>
         ))}
         <div className="flex items-center space-x-2">
-            <div className={`w-4 h-4 rounded-sm bg-blue-500`}></div>
+            <div className={`w-4 h-4 rounded-sm bg-red-500`}></div>
             <span className="text-sm capitalize text-gray-300">Path</span>
         </div>
         <div className="flex items-center space-x-2">

@@ -1,4 +1,3 @@
-import { campusData } from "./data/campusData";
 
 export enum UnitType {
   CLASSROOM = 'CLASSROOM',
@@ -8,6 +7,7 @@ export enum UnitType {
   OFFICE = 'OFFICE',
   RESTRICTED = 'RESTRICTED',
   ENTRANCE = 'ENTRANCE',
+  RESTAURANT = 'RESTAURANT',
 }
 
 export enum DetailType {
@@ -29,15 +29,18 @@ export interface Detail {
   levelId: string;
   line: Point[];
   datasetId: number;
+  useType?: string; // e.g., 'Door-A', 'Wall-i', 'Dorr-R'
+  height?: number; // From Height_Rel
 }
 
 export interface Unit {
   id: string;
-  name: string;
+  name: string; // From Display_Name
   type: UnitType;
   levelId: string;
   polygon: Polygon;
   datasetId: number;
+  accessible?: boolean; // From Accessibility = 1
   // Used to link stairs/elevators across levels
   verticalConnectorId?: string;
 }
@@ -56,9 +59,18 @@ export interface Facility {
   name: string;
   polygon: Polygon;
   datasetId: number;
+  siteId?: string;
+}
+
+export interface Site {
+    id: string;
+    name: string;
+    polygon: Polygon;
+    datasetId: number;
 }
 
 export interface CampusData {
+  sites: Site[];
   facilities: Facility[];
   levels: Level[];
   units: Unit[];
@@ -70,6 +82,8 @@ export interface Dataset {
     name: string;
     createdAt: string;
     isActive: boolean;
+    originLat?: number;
+    originLon?: number;
 }
 
 export interface GraphNode {
@@ -89,6 +103,21 @@ export interface Graph {
   edges: Map<string, GraphEdge[]>;
 }
 
+// FIX: Add missing types for the alternative graph generation logic.
+// These types are used in `services/graphGenerator.ts`.
+export interface NavGraphNode {
+  id: string;
+  type: 'center' | 'waypoint';
+  point: Point;
+  levelId: string;
+  originalUnitId: string;
+}
+
+export interface NavigationGraph {
+  nodes: NavGraphNode[];
+  edges: Record<string, { from: string; to: string; weight: number }[]>;
+}
+
 export enum AccessibilityFilter {
   NONE = 'NONE',
   ELEVATOR_ONLY = 'ELEVATOR_ONLY',
@@ -101,4 +130,9 @@ export type Role = 'admin' | 'viewer';
 export interface User {
   name: string;
   role: Role;
+}
+
+export interface Waypoint {
+  point: Point;
+  levelId: string;
 }
