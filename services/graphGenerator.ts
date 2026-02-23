@@ -1,19 +1,20 @@
 
-import type { CampusData, NavigationGraph, NavGraphNode, Unit } from '../types';
+import type { CampusData, NavigationGraph, NavGraphNode, NavGraphEdge, Unit } from '../types';
 import { UnitType } from '../types';
 import { getPolygonCenter, findSharedEdge, getEuclideanDistance } from '../utils/geometry';
 
 export const generateNavigationGraph = (data: CampusData): NavigationGraph => {
   const nodes: NavGraphNode[] = [];
-  const edges: Record<string, { from: string; to: string; weight: number }[]> = {};
+  const edges: Record<string, NavGraphEdge[]> = {};
   
-  const addEdge = (nodeAId: string, nodeBId: string, weight: number) => {
+  const addEdge = (nodeAId: string, nodeBId: string, weight: number, type: 'horizontal' | 'vertical') => {
     if (!edges[nodeAId]) edges[nodeAId] = [];
     if (!edges[nodeBId]) edges[nodeBId] = [];
-    edges[nodeAId].push({ from: nodeAId, to: nodeBId, weight });
-    edges[nodeBId].push({ from: nodeBId, to: nodeAId, weight });
+    edges[nodeAId].push({ from: nodeAId, to: nodeBId, weight, type });
+    edges[nodeBId].push({ from: nodeBId, to: nodeAId, weight, type });
   };
 
+  // Only include units that are marked as accessible (physically walkable)
   const traversableUnits = data.units.filter(u => u.accessible);
 
   // 1. Create a "center" node for every single traversable unit
@@ -24,62 +25,76 @@ export const generateNavigationGraph = (data: CampusData): NavigationGraph => {
       point: getPolygonCenter(unit.polygon),
       levelId: unit.levelId,
       originalUnitId: unit.id,
+      unitType: unit.type,
     });
   }
 
-  const navigableTypes = [UnitType.CORRIDOR, UnitType.STAIRS, UnitType.ELEVATOR, UnitType.ENTRANCE];
-  const destinationTypes = [UnitType.CLASSROOM, UnitType.OFFICE, UnitType.RESTAURANT, UnitType.ENTRANCE];
+  // Define types that are primarily for transit.
+  // Note: We allow connections between ANY adjacent accessible units, 
+  // but the connection style (direct vs waypoint) depends on type.
+  const navigableTypes = new Set([
+    UnitType.CORRIDOR, 
+    UnitType.STAIRS, 
+    UnitType.ELEVATOR, 
+    UnitType.ENTRANCE
+  ]);
 
-  // 2. Create waypoint nodes and connect units to the navigable network
-  for (const unitA of traversableUnits) {
-    for (const unitB of traversableUnits) {
-      if (unitA.id >= unitB.id) continue; // Avoid duplicate checks
+  // 2. Connect units on the same level based on adjacency
+  for (let i = 0; i < traversableUnits.length; i++) {
+    for (let j = i + 1; j < traversableUnits.length; j++) {
+      const unitA = traversableUnits[i];
+      const unitB = traversableUnits[j];
+      
       if (unitA.levelId !== unitB.levelId) continue;
-
-      const isANavigable = navigableTypes.includes(unitA.type);
-      const isBNavigable = navigableTypes.includes(unitB.type);
-      const isADestination = destinationTypes.includes(unitA.type);
-      const isBDestination = destinationTypes.includes(unitB.type);
 
       const sharedEdge = findSharedEdge(unitA.polygon, unitB.polygon);
       if (!sharedEdge) continue;
 
-      // Case 1: Two navigable units are adjacent (e.g., corridor to corridor)
+      const isANavigable = navigableTypes.has(unitA.type);
+      const isBNavigable = navigableTypes.has(unitB.type);
+
+      // If both are purely navigable spaces (e.g. Corridor to Corridor),
+      // connect centers directly for a simpler graph and smoother path.
       if (isANavigable && isBNavigable) {
         const centerA = getPolygonCenter(unitA.polygon);
         const centerB = getPolygonCenter(unitB.polygon);
         const weight = getEuclideanDistance(centerA, centerB);
-        addEdge(unitA.id, unitB.id, weight);
-      }
-      // Case 2: A destination unit is adjacent to a navigable unit (e.g., office to corridor)
-      else if ((isADestination && isBNavigable) || (isBDestination && isANavigable)) {
-        const destUnit = isADestination ? unitA : unitB;
-        const navUnit = isANavigable ? unitA : unitB;
-
-        const waypointId = `waypoint-${destUnit.id}-${navUnit.id}`;
-        const midpoint = {
-          x: (sharedEdge[0].x + sharedEdge[1].x) / 2,
-          y: (sharedEdge[0].y + sharedEdge[1].y) / 2
-        };
+        addEdge(unitA.id, unitB.id, weight, 'horizontal');
+      } else {
+        // If one or both are rooms/destinations (e.g. Corridor to Classroom, or Classroom to Office),
+        // connect them via a waypoint on the shared edge.
+        // This ensures the path enters/exits through the "door" (shared edge) rather than clipping walls.
+        const waypointId = `waypoint-${unitA.id}-${unitB.id}`;
         
-        // Add the waypoint node
-        nodes.push({
-          id: waypointId,
-          type: 'waypoint',
-          point: midpoint,
-          levelId: destUnit.levelId,
-          originalUnitId: destUnit.id,
-        });
-
-        // Connect destination center to its waypoint
-        const destCenter = getPolygonCenter(destUnit.polygon);
-        const weightToWaypoint = getEuclideanDistance(destCenter, midpoint);
-        addEdge(destUnit.id, waypointId, weightToWaypoint);
+        // Check if waypoint node already exists to avoid duplicates
+        let waypointNode = nodes.find(n => n.id === waypointId);
         
-        // Connect waypoint to the navigable unit's center
-        const navCenter = getPolygonCenter(navUnit.polygon);
-        const weightToNav = getEuclideanDistance(midpoint, navCenter);
-        addEdge(waypointId, navUnit.id, weightToNav);
+        if (!waypointNode) {
+            const midpoint = {
+              x: (sharedEdge[0].x + sharedEdge[1].x) / 2,
+              y: (sharedEdge[0].y + sharedEdge[1].y) / 2
+            };
+
+            waypointNode = {
+                id: waypointId,
+                type: 'waypoint',
+                point: midpoint,
+                levelId: unitA.levelId,
+                originalUnitId: unitA.id, // Associates loosely with one of the units
+                unitType: undefined 
+            };
+            nodes.push(waypointNode);
+        }
+
+        // Connect Unit A -> Waypoint
+        const centerA = getPolygonCenter(unitA.polygon);
+        const weightA = getEuclideanDistance(centerA, waypointNode.point);
+        addEdge(unitA.id, waypointId, weightA, 'horizontal');
+        
+        // Connect Waypoint -> Unit B
+        const centerB = getPolygonCenter(unitB.polygon);
+        const weightB = getEuclideanDistance(waypointNode.point, centerB);
+        addEdge(waypointId, unitB.id, weightB, 'horizontal');
       }
     }
   }
@@ -108,9 +123,10 @@ export const generateNavigationGraph = (data: CampusData): NavigationGraph => {
         const unitB = sortedUnits[i + 1];
         const centerA = getPolygonCenter(unitA.polygon);
         const centerB = getPolygonCenter(unitB.polygon);
-        // Vertical travel is heavily weighted to be less preferable than horizontal
-        const weight = getEuclideanDistance(centerA, centerB) + 1000;
-        addEdge(unitA.id, unitB.id, weight);
+        // Vertical travel is weighted to be less preferable than short horizontal walks, 
+        // but we don't want to discourage it too much if it's the only way.
+        const weight = getEuclideanDistance(centerA, centerB) + 20; 
+        addEdge(unitA.id, unitB.id, weight, 'vertical');
     }
   });
 

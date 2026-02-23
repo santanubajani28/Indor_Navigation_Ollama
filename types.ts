@@ -111,11 +111,19 @@ export interface NavGraphNode {
   point: Point;
   levelId: string;
   originalUnitId: string;
+  unitType?: UnitType;
+}
+
+export interface NavGraphEdge {
+    from: string;
+    to: string;
+    weight: number;
+    type: 'horizontal' | 'vertical';
 }
 
 export interface NavigationGraph {
   nodes: NavGraphNode[];
-  edges: Record<string, { from: string; to: string; weight: number }[]>;
+  edges: Record<string, NavGraphEdge[]>;
 }
 
 export enum AccessibilityFilter {
