@@ -27,7 +27,7 @@ const MapPage: React.FC<MapPageProps> = ({ campusData, mapOrigin, activeDatasetN
   const [selectedLevelId, setSelectedLevelId] = useState<string>('');
   const [pathDistance, setPathDistance] = useState<number | null>(null);
   const [waypoints, setWaypoints] = useState<Waypoint[] | null>(null);
-  
+
   const { getPath, getPathWaypoints, calculatePathDistance } = useGraph(campusData);
 
   const handleFindPath = async () => {
@@ -40,7 +40,7 @@ const MapPage: React.FC<MapPageProps> = ({ campusData, mapOrigin, activeDatasetN
         setPathInstructions('');
         const newWaypoints = getPathWaypoints(newPath);
         setWaypoints(newWaypoints);
-        
+
         const distance = calculatePathDistance(newWaypoints);
         setPathDistance(distance);
 
@@ -77,22 +77,22 @@ const MapPage: React.FC<MapPageProps> = ({ campusData, mapOrigin, activeDatasetN
   useEffect(() => {
     handleClearPath();
     if (campusData.levels && campusData.levels.length > 0) {
-      const groundFloor = campusData.levels.find(l => l.zIndex === 0) || campusData.levels.sort((a,b) => a.zIndex - b.zIndex)[0];
+      const groundFloor = campusData.levels.find(l => l.zIndex === 0) || campusData.levels.sort((a, b) => a.zIndex - b.zIndex)[0];
       setSelectedLevelId(groundFloor.id);
     } else {
       setSelectedLevelId('');
     }
   }, [campusData, handleClearPath]);
-  
+
   // Automatically switch the visible floor when the start or end unit changes.
   useEffect(() => {
     // Prioritize showing the end unit's level, as that's the user's destination.
     const unitIdToShow = endUnit || startUnit;
     if (unitIdToShow) {
-        const unit = campusData.units.find(u => u.id === unitIdToShow);
-        if (unit) {
-            setSelectedLevelId(unit.levelId);
-        }
+      const unit = campusData.units.find(u => u.id === unitIdToShow);
+      if (unit) {
+        setSelectedLevelId(unit.levelId);
+      }
     }
   }, [startUnit, endUnit, campusData.units]);
 
@@ -119,48 +119,48 @@ const MapPage: React.FC<MapPageProps> = ({ campusData, mapOrigin, activeDatasetN
         pathDistance={pathDistance}
         activeDatasetName={activeDatasetName}
       />
-      <div className="flex-1 relative">
+      <div className="flex-1 relative flex flex-col">
         {viewMode === '2D' ? (
-            <MapViewer 
-                data={campusData} 
-                waypoints={waypoints}
-                startUnitId={startUnit}
-                endUnitId={endUnit}
-                selectedLevelId={selectedLevelId}
-                showProject={showProject}
-                mapOrigin={mapOrigin}
-            />
+          <MapViewer
+            data={campusData}
+            waypoints={waypoints}
+            startUnitId={startUnit}
+            endUnitId={endUnit}
+            selectedLevelId={selectedLevelId}
+            showProject={showProject}
+            mapOrigin={mapOrigin}
+          />
         ) : (
-            <MapViewer3D
-                data={campusData} 
-                path={path} 
-                waypoints={waypoints}
-                startUnitId={startUnit}
-                endUnitId={endUnit}
-                basemapType={'satellite'}
-                showProject={showProject}
-                mapOrigin={mapOrigin}
-            />
+          <MapViewer3D
+            data={campusData}
+            path={path}
+            waypoints={waypoints}
+            startUnitId={startUnit}
+            endUnitId={endUnit}
+            basemapType={'satellite'}
+            showProject={showProject}
+            mapOrigin={mapOrigin}
+          />
         )}
         <div className="absolute top-4 right-4 z-10 flex items-center space-x-2">
-            <div className="bg-gray-800/80 backdrop-blur-sm p-2 rounded-full text-white flex items-center space-x-2 text-sm">
-                <span className="font-medium px-1">Project</span>
-                <button
-                    onClick={() => setShowProject(!showProject)}
-                    className={`w-12 h-6 rounded-full flex items-center transition-colors ${showProject ? 'bg-indigo-600' : 'bg-gray-600'}`}
-                    aria-pressed={showProject}
-                    aria-label="Toggle project visibility"
-                >
-                    <span className={`inline-block w-5 h-5 bg-white rounded-full transform transition-transform ${showProject ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-            </div>
+          <div className="bg-gray-800/80 backdrop-blur-sm p-2 rounded-full text-white flex items-center space-x-2 text-sm">
+            <span className="font-medium px-1">Project</span>
             <button
-                onClick={() => setViewMode(prev => prev === '2D' ? '3D' : '2D')}
-                className="bg-gray-800/80 backdrop-blur-sm p-2 rounded-full text-white hover:bg-indigo-600 transition-colors"
-                aria-label={`Switch to ${viewMode === '2D' ? '3D' : '2D'} view`}
+              onClick={() => setShowProject(!showProject)}
+              className={`w-12 h-6 rounded-full flex items-center transition-colors ${showProject ? 'bg-indigo-600' : 'bg-gray-600'}`}
+              aria-pressed={showProject}
+              aria-label="Toggle project visibility"
             >
-                {viewMode === '2D' ? <View3DIcon className="w-6 h-6" /> : <View2DIcon className="w-6 h-6" />}
+              <span className={`inline-block w-5 h-5 bg-white rounded-full transform transition-transform ${showProject ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
+          </div>
+          <button
+            onClick={() => setViewMode(prev => prev === '2D' ? '3D' : '2D')}
+            className="bg-gray-800/80 backdrop-blur-sm p-2 rounded-full text-white hover:bg-indigo-600 transition-colors"
+            aria-label={`Switch to ${viewMode === '2D' ? '3D' : '2D'} view`}
+          >
+            {viewMode === '2D' ? <View3DIcon className="w-6 h-6" /> : <View2DIcon className="w-6 h-6" />}
+          </button>
         </div>
       </div>
     </div>

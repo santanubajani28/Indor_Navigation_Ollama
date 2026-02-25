@@ -11,48 +11,48 @@ const dbName = 'sql-campus-db';
 const storeName = 'sqlite-db';
 
 async function getIDB() {
-  return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(dbName, 1);
-    request.onerror = () => reject("Error opening IndexedDB");
-    request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(storeName)) {
-        db.createObjectStore(storeName);
-      }
-    };
-  });
+    return new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(dbName, 1);
+        request.onerror = () => reject("Error opening IndexedDB");
+        request.onsuccess = () => resolve(request.result);
+        request.onupgradeneeded = (event) => {
+            const db = (event.target as IDBOpenDBRequest).result;
+            if (!db.objectStoreNames.contains(storeName)) {
+                db.createObjectStore(storeName);
+            }
+        };
+    });
 }
 
 async function loadDbFromIdb(): Promise<Uint8Array | null> {
-  const idb = await getIDB();
-  return new Promise((resolve) => {
-    const transaction = idb.transaction(storeName, 'readonly');
-    const store = transaction.objectStore(storeName);
-    const request = store.get('database');
-    request.onsuccess = () => {
-      resolve(request.result as Uint8Array | null);
-    };
-    request.onerror = () => resolve(null);
-  });
+    const idb = await getIDB();
+    return new Promise((resolve) => {
+        const transaction = idb.transaction(storeName, 'readonly');
+        const store = transaction.objectStore(storeName);
+        const request = store.get('database');
+        request.onsuccess = () => {
+            resolve(request.result as Uint8Array | null);
+        };
+        request.onerror = () => resolve(null);
+    });
 }
 
 async function saveDbToIdb(data: Uint8Array) {
-  const idb = await getIDB();
-  const transaction = idb.transaction(storeName, 'readwrite');
-  const store = transaction.objectStore(storeName);
-  store.put(data, 'database');
+    const idb = await getIDB();
+    const transaction = idb.transaction(storeName, 'readwrite');
+    const store = transaction.objectStore(storeName);
+    store.put(data, 'database');
 }
 
 // --- SQL Execution Helpers ---
 
 const objectify = (stmt: any) => {
-  const results = [];
-  while (stmt.step()) {
-    results.push(stmt.getAsObject());
-  }
-  stmt.free();
-  return results;
+    const results = [];
+    while (stmt.step()) {
+        results.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return results;
 }
 
 const createTables = () => {
@@ -123,7 +123,7 @@ const seedDatabase = () => {
     if (!db) return;
     // Seed users
     const userCount = db.exec("SELECT COUNT(*) FROM users")[0].values[0][0];
-    if(userCount === 0) {
+    if (userCount === 0) {
         db.exec(`
             INSERT INTO users (username, password, role) VALUES ('santanu', '111', 'admin');
             INSERT INTO users (username, password, role) VALUES ('san', '111', 'viewer');
@@ -146,7 +146,7 @@ export const dbService = {
         if (savedDb) {
             console.log("Loading database from persistence...");
             db = new SQL.Database(savedDb);
-             // Migration logic for existing databases
+            // Migration logic for existing databases
             try {
                 const tableInfoRes = db.exec("PRAGMA table_info(datasets)");
                 if (tableInfoRes.length > 0) {
@@ -163,7 +163,7 @@ export const dbService = {
             console.log("Creating new database...");
             db = new SQL.Database();
         }
-        
+
         createTables();
         seedDatabase();
         await this.save();
@@ -186,17 +186,17 @@ export const dbService = {
         }
         return null;
     },
-    
+
     async getCampusDataForId(datasetId: number): Promise<CampusData> {
         if (!db) throw new Error("DB not initialized");
-        const sites = objectify(db.prepare(`SELECT * FROM sites WHERE datasetId = ${datasetId}`)).map(s => ({ ...s, polygon: JSON.parse(s.polygon as string)})) as Site[];
-        const facilities = objectify(db.prepare(`SELECT * FROM facilities WHERE datasetId = ${datasetId}`)).map(f => ({ ...f, polygon: JSON.parse(f.polygon as string)})) as Facility[];
-        const levels = objectify(db.prepare(`SELECT * FROM levels WHERE datasetId = ${datasetId}`)).map(l => ({...l, polygon: JSON.parse(l.polygon as string)})) as Level[];
-        const units = objectify(db.prepare(`SELECT * FROM units WHERE datasetId = ${datasetId}`)).map(u => ({...u, polygon: JSON.parse(u.polygon as string), accessible: u.accessible === 1})) as Unit[];
-        const details = objectify(db.prepare(`SELECT * FROM details WHERE datasetId = ${datasetId}`)).map(d => ({...d, line: JSON.parse(d.line as string)})) as Detail[];
+        const sites = objectify(db.prepare(`SELECT * FROM sites WHERE datasetId = ${datasetId}`)).map(s => ({ ...s, polygon: JSON.parse(s.polygon as string) })) as Site[];
+        const facilities = objectify(db.prepare(`SELECT * FROM facilities WHERE datasetId = ${datasetId}`)).map(f => ({ ...f, polygon: JSON.parse(f.polygon as string) })) as Facility[];
+        const levels = objectify(db.prepare(`SELECT * FROM levels WHERE datasetId = ${datasetId}`)).map(l => ({ ...l, polygon: JSON.parse(l.polygon as string) })) as Level[];
+        const units = objectify(db.prepare(`SELECT * FROM units WHERE datasetId = ${datasetId}`)).map(u => ({ ...u, polygon: JSON.parse(u.polygon as string), accessible: u.accessible !== 0 })) as Unit[];
+        const details = objectify(db.prepare(`SELECT * FROM details WHERE datasetId = ${datasetId}`)).map(d => ({ ...d, line: JSON.parse(d.line as string) })) as Detail[];
         return { sites, facilities, levels, units, details };
     },
-    
+
     async getActiveCampusData(): Promise<CampusData> {
         if (!db) throw new Error("DB not initialized");
         const activeDataset = objectify(db.prepare("SELECT id FROM datasets WHERE isActive = 1"))[0];
@@ -229,12 +229,12 @@ export const dbService = {
         if (isActive) {
             db.exec("UPDATE datasets SET isActive = 0");
         }
-        
+
         const totalItems = (data.sites?.length || 0) +
-                           (data.facilities?.length || 0) +
-                           (data.levels?.length || 0) +
-                           (data.units?.length || 0) +
-                           (data.details?.length || 0);
+            (data.facilities?.length || 0) +
+            (data.levels?.length || 0) +
+            (data.units?.length || 0) +
+            (data.details?.length || 0);
         let itemsProcessed = 0;
 
         const stmt = db.prepare("INSERT INTO datasets (name, createdAt, isActive, originLat, originLon) VALUES (?, ?, ?, ?, ?)");
@@ -281,11 +281,11 @@ export const dbService = {
             db.exec("ROLLBACK;");
             throw e; // Propagate error to be caught by the UI
         }
-        
+
         onProgress?.(100);
         await this.save();
     },
-    
+
     async deleteDataset(id: number): Promise<void> {
         if (!db) throw new Error("DB not initialized");
 

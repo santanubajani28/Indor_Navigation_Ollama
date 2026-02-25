@@ -3,10 +3,10 @@ import { UnitType, DetailType } from '../types';
 
 // --- Type Declarations for External Libraries ---
 declare const shp: {
-  parseZip: (buffer: ArrayBuffer) => Promise<GeoJsonFeatureCollection | GeoJsonFeatureCollection[]>;
+    parseZip: (buffer: ArrayBuffer) => Promise<GeoJsonFeatureCollection | GeoJsonFeatureCollection[]>;
 };
 declare const geopackage: {
-  open: (buffer: ArrayBuffer) => Promise<any>;
+    open: (buffer: ArrayBuffer) => Promise<any>;
 };
 declare const JSZip: any;
 declare const proj4: any;
@@ -15,12 +15,12 @@ declare const proj4: any;
 // --- GeoJSON Interfaces (Simplified) ---
 type GeoJsonProperties = { [key: string]: any };
 interface GeoJsonFeature {
-  type: 'Feature';
-  geometry: {
-    type: 'Polygon' | 'LineString';
-    coordinates: number[][][] | number[][]; 
-  } | null; // Allow geometry to be null
-  properties: GeoJsonProperties;
+    type: 'Feature';
+    geometry: {
+        type: 'Polygon' | 'LineString';
+        coordinates: number[][][] | number[][];
+    } | null; // Allow geometry to be null
+    properties: GeoJsonProperties;
 }
 interface GeoJsonFeatureCollection {
     type: 'FeatureCollection';
@@ -65,15 +65,15 @@ const hasPropertyCI = (properties: GeoJsonProperties, key: string): boolean => {
  * @returns A Polygon array of {x, y} points.
  */
 const geoJsonPolygonToAppPolygon = (coordinates: number[][][]): Polygon => {
-  if (!coordinates || !coordinates[0] || coordinates[0].length < 3) return [];
-  // Use the exterior ring, ignore interior holes for simplicity.
-  const ring = coordinates[0];
-  // Remove the last point if it's identical to the first (GeoJSON standard).
-  if (ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]) {
-    ring.pop();
-  }
-  // Our app uses x for longitude, y for latitude
-  return ring.map(([x, y]) => ({ x, y }));
+    if (!coordinates || !coordinates[0] || coordinates[0].length < 3) return [];
+    // Use the exterior ring, ignore interior holes for simplicity.
+    const ring = coordinates[0];
+    // Remove the last point if it's identical to the first (GeoJSON standard).
+    if (ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]) {
+        ring.pop();
+    }
+    // Our app uses x for longitude, y for latitude
+    return ring.map(([x, y]) => ({ x, y }));
 };
 
 /**
@@ -152,7 +152,7 @@ export const parseShapefile = async (buffer: ArrayBuffer): Promise<{ campusData:
                 }
             }
         } else {
-             console.warn("Could not find EPSG code in .prj file. Assuming WGS84 coordinates.");
+            console.warn("Could not find EPSG code in .prj file. Assuming WGS84 coordinates.");
         }
     } else {
         console.warn("No .prj file found in zip archive. Assuming WGS84 coordinates.");
@@ -163,7 +163,7 @@ export const parseShapefile = async (buffer: ArrayBuffer): Promise<{ campusData:
     if (!geojsonResults) {
         throw new Error('Could not parse Shapefile zip. Ensure it is a valid zip file.');
     }
-    
+
     const featureCollections = Array.isArray(geojsonResults) ? geojsonResults : [geojsonResults];
     const allFeatures = featureCollections.flatMap(fc => fc.features).filter(f => f && f.geometry);
 
@@ -172,7 +172,7 @@ export const parseShapefile = async (buffer: ArrayBuffer): Promise<{ campusData:
         allFeatures.forEach(feature => {
             if (feature.geometry) {
                 if (feature.geometry.type === 'Polygon') {
-                    feature.geometry.coordinates = feature.geometry.coordinates.map(ring => 
+                    feature.geometry.coordinates = feature.geometry.coordinates.map(ring =>
                         ring.map(point => reproject!(point))
                     );
                 } else if (feature.geometry.type === 'LineString') {
@@ -199,7 +199,7 @@ export const parseShapefile = async (buffer: ArrayBuffer): Promise<{ campusData:
 
     for (const feature of allFeatures) {
         const p = feature.properties;
-        
+
         if (hasPropertyCI(p, 'Details_Id')) {
             const detailsId = String(getPropertyCI(p, 'Details_Id'));
             if (seenDetailIds.has(detailsId)) continue;
@@ -226,7 +226,11 @@ export const parseShapefile = async (buffer: ArrayBuffer): Promise<{ campusData:
                 type: validateUnitType(getPropertyCI(p, 'Unit_Type')),
                 levelId: String(getPropertyCI(p, 'Level_Id')),
                 polygon: geoJsonPolygonToAppPolygon(feature.geometry!.coordinates as number[][][]),
-                accessible: accessibility === 1 || String(accessibility) === '1',
+                // Default to accessible when Access field is missing.
+                // Only mark as not accessible when explicitly set to 0 or '0'.
+                accessible: accessibility === undefined || accessibility === null
+                    ? true
+                    : (accessibility === 1 || String(accessibility) === '1'),
                 verticalConnectorId: getPropertyCI(p, 'v_conn_id') ? String(getPropertyCI(p, 'v_conn_id')) : undefined,
                 datasetId: 0,
             });
@@ -306,7 +310,7 @@ export const parseShapefile = async (buffer: ArrayBuffer): Promise<{ campusData:
  */
 export const parseGeoPackage = async (buffer: ArrayBuffer): Promise<CampusData> => {
     const gpkg = await geopackage.open(buffer);
-    
+
     const requiredTables = ['facilities', 'levels', 'units'];
     const tables = gpkg.getFeatureTables();
     if (!requiredTables.every(t => tables.includes(t))) {
@@ -357,12 +361,12 @@ export const parseGeoPackage = async (buffer: ArrayBuffer): Promise<CampusData> 
 
     // GeoPackage details are optional and would need to be handled similarly if present
     const details: Detail[] = [];
-     if (tables.includes('details')) {
+    if (tables.includes('details')) {
         for (const feature of gpkg.iterateGeoJSONFeatures('details')) {
             if (!feature || !feature.geometry) continue; // Skip features with null geometry
             const p = feature.properties;
             const useType = String(p.Use_Type || p.use_type);
-             details.push({
+            details.push({
                 id: String(p.id || p.ID),
                 levelId: String(p.levelId),
                 type: mapDetailType(useType),
@@ -373,7 +377,7 @@ export const parseGeoPackage = async (buffer: ArrayBuffer): Promise<CampusData> 
             });
         }
     }
-     // Note: Reprojection and origin calculation for GeoPackage is not implemented in this version.
+    // Note: Reprojection and origin calculation for GeoPackage is not implemented in this version.
     return { sites: [], facilities, levels, units, details };
 };
 

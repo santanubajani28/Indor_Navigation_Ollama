@@ -2,7 +2,10 @@
 import type { Point, Polygon } from '../types';
 
 // --- GEOMETRY HELPERS ---
-const EPSILON = 1e-9;
+// EPSILON for geometric comparisons.
+// 1e-6 degrees ≈ 0.1m on the ground — appropriate for real-world GIS shapefile data
+// which often has floating-point differences at shared vertices between adjacent polygons.
+const EPSILON = 1e-6;
 
 /**
  * Calculates the distance between two lat/lon points in meters using the Haversine formula.
@@ -10,15 +13,15 @@ const EPSILON = 1e-9;
 export const getHaversineDistance = (p1: Point, p2: Point): number => {
     if (Math.hypot(p1.x - p2.x, p1.y - p2.y) < EPSILON) return 0;
     const R = 6371e3; // metres
-    const φ1 = p1.y * Math.PI/180; // φ, λ in radians
-    const φ2 = p2.y * Math.PI/180;
-    const Δφ = (p2.y-p1.y) * Math.PI/180;
-    const Δλ = (p2.x-p1.x) * Math.PI/180;
+    const φ1 = p1.y * Math.PI / 180; // φ, λ in radians
+    const φ2 = p2.y * Math.PI / 180;
+    const Δφ = (p2.y - p1.y) * Math.PI / 180;
+    const Δλ = (p2.x - p1.x) * Math.PI / 180;
 
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c; // in metres
 };
@@ -64,7 +67,7 @@ export const findSharedEdge = (poly1: Polygon, poly2: Polygon): [Point, Point] |
         for (let j = 0; j < poly2.length; j++) {
             const q1 = poly2[j];
             const q2 = poly2[(j + 1) % poly2.length];
-            
+
             // A common case for shared edges in GIS data is that they are traversed in opposite directions.
             // Check for this fast-path case first.
             const p1_eq_q2 = Math.hypot(p1.x - q2.x, p1.y - q2.y) < EPSILON;
@@ -74,7 +77,7 @@ export const findSharedEdge = (poly1: Polygon, poly2: Polygon): [Point, Point] |
                 // The edges are identical but reversed, this is a perfect shared edge.
                 return [p1, p2];
             }
-            
+
             // If not a perfect reversed match, check for partial overlap on the same line.
             if (areCollinear(p1, p2, q1) && areCollinear(p1, p2, q2)) {
                 const overlapPoints: Point[] = [];
